@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbonsense-worker
+  namespace: carbonsense
+  labels:
+    app: carbonsense-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: carbonsense-worker
+  template:
+    metadata:
+      labels:
+        app: carbonsense-worker
+    spec:
+      containers:
+        - name: worker
+          image: your-registry/carbonsense-api:latest
+          command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: carbonsense-config
+            - secretRef:
+                name: carbonsense-secrets
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          volumeMounts:
+            - name: model-storage
+              mountPath: /app/models
+            - name: vector-storage
+              mountPath: /app/vector_store
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: model-pvc
+        - name: vector-storage
+          persistentVolumeClaim:
+            claimName: vector-store-pvc

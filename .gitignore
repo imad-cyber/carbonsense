@@ -1,0 +1,32 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Environment — never commit real secrets
+.env
+.env.docker
+
+# ML artifacts
+mlflow.db
+mlruns/
+models/*.joblib
+vector_store/
+logs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vercel/
+frontend/.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

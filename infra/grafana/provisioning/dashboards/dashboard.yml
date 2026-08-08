@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: CarbonSense
+    folder: CarbonSense
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards

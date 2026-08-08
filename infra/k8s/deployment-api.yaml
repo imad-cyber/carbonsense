@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbonsense-api
+  namespace: carbonsense
+  labels:
+    app: carbonsense-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: carbonsense-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0      # zero-downtime deployment
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: carbonsense-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: your-registry/carbonsense-api:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: carbonsense-config
+            - secretRef:
+                name: carbonsense-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: model-storage
+              mountPath: /app/models
+            - name: vector-storage
+              mountPath: /app/vector_store
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: model-pvc
+        - name: vector-storage
+          persistentVolumeClaim:
+            claimName: vector-store-pvc
