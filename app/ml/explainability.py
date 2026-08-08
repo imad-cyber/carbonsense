@@ -42,9 +42,7 @@ def explain_prediction(
 
     # Build a ranked list of feature contributions
     contributions = []
-    for i, (feat_name, shap_val) in enumerate(
-        zip(feature_names, shap_values[0])
-    ):
+    for feat_name, shap_val in zip(feature_names, shap_values[0], strict=False):
         if abs(shap_val) > 0.01:  # ignore negligible contributions
             contributions.append({
                 "feature": feat_name,
@@ -97,7 +95,7 @@ def get_global_feature_importance(
         for rank, (name, val)
         in enumerate(
             sorted(
-                zip(feature_names, mean_abs_shap),
+                zip(feature_names, mean_abs_shap, strict=False),
                 key=lambda x: x[1],
                 reverse=True,
             )

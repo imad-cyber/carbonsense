@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sqlalchemy.orm import Session
-from app.models.emission import EmissionRecord, EmissionScope
+from app.models.emission import EmissionRecord
 
 
 def load_emission_dataframe(db: Session, company_id: int = None) -> pd.DataFrame:

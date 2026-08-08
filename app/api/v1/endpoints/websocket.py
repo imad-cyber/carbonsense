@@ -17,12 +17,11 @@ from fastapi import (
     status,
 )
 from jose import JWTError
-from sqlalchemy.orm import Session
 
 from app.core.connection_manager import manager
 from app.core.dependencies import require_admin
 from app.core.security import decode_access_token
-from app.db.database import SessionLocal, get_db
+from app.db.database import SessionLocal
 from app.models.user import User
 from app.services.user_service import UserService
 

@@ -190,7 +190,7 @@ class EmissionInferenceService:
 
         records = []
         anomaly_count = 0
-        for (_, row), pred, score in zip(df_year.iterrows(), predictions, scores):
+        for (_, row), pred, score in zip(df_year.iterrows(), predictions, scores, strict=False):
             is_anomaly = bool(pred == -1)
             severity = None
             if is_anomaly:

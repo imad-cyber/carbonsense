@@ -18,8 +18,6 @@ from app.core.dependencies import (
 from app.models.user import User
 from app.worker.tasks import process_bulk_emissions, generate_csrd_report
 from app.schemas.emission import BulkEmissionUpload, TaskStatusResponse
-from celery.result import AsyncResult
-from app.worker.celery_app import celery_app
 
 
 router = APIRouter(prefix="/emissions", tags=["Emissions"])
@@ -82,14 +80,7 @@ def get_emission_summary(company_id: int, year: int, db: Session = Depends(get_d
     This endpoint feeds the frontend dashboard and the ML pipeline.
     """
     return EmissionService.get_summary(db, company_id, year)
-# Add these imports at the top of emissions.py:
-from app.worker.tasks import process_bulk_emissions, generate_csrd_report
-from app.schemas.emission import BulkEmissionUpload, TaskStatusResponse
-from celery.result import AsyncResult
-from app.worker.celery_app import celery_app
 
-
-# Add these routes to the emissions router:
 
 @router.post(
     "/bulk/{company_id}",

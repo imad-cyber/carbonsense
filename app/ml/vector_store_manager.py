@@ -6,9 +6,7 @@ Everything degrades gracefully when the RAG dependencies or the
 OpenAI key are missing.
 """
 import logging
-from pathlib import Path
 
-from app.core.config import settings
 from app.ml.document_processor import (
     add_documents_to_store,
     load_pdf,

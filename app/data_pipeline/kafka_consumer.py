@@ -79,7 +79,6 @@ class EmissionEventConsumer:
             return
 
         try:
-            import pandas as pd
 
             from app.data_pipeline.kafka_producer import emission_producer
             from app.db.database import SessionLocal

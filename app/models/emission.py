@@ -1,7 +1,7 @@
 import enum
 from sqlalchemy import (
     Column, Integer, Float, String, Enum,
-    ForeignKey, Date, Text, CheckConstraint
+    ForeignKey, Text, CheckConstraint
 )
 from sqlalchemy.orm import relationship
 from app.db.database import Base

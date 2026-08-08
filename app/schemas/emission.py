@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from datetime import datetime
 from app.models.emission import EmissionScope, EmissionCategory

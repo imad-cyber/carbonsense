@@ -1,10 +1,8 @@
 import logging
 import mlflow
 import pandas as pd
-import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import RobustScaler
-import joblib
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
