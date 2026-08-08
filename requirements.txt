@@ -130,6 +130,8 @@ wrapt==2.2.1
 xgboost==3.2.0
 yarl==1.24.2
 zipp==4.1.0
+# Linux-only transitive dep of mlflow — pin to a version that ships a wheel
+gunicorn==23.0.0; sys_platform != "win32"
 # ── Phase 7-10 additions ─────────────────────────────────────────
 prometheus-client==0.26.0
 sse-starlette==3.4.8
