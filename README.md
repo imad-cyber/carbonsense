@@ -1,7 +1,7 @@
 # CarbonSense — AI-Powered CSRD/ESG Carbon Intelligence Platform
 
-[![CI/CD](https://github.com/YOUR_USERNAME/carbonsense/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/carbonsense/actions/workflows/ci.yml)
-[![Frontend](https://github.com/YOUR_USERNAME/carbonsense/actions/workflows/frontend.yml/badge.svg)](https://github.com/YOUR_USERNAME/carbonsense/actions/workflows/frontend.yml)
+[![CI/CD](https://github.com/imad-cyber/carbonsense/actions/workflows/ci.yml/badge.svg)](https://github.com/imad-cyber/carbonsense/actions/workflows/ci.yml)
+[![Frontend](https://github.com/imad-cyber/carbonsense/actions/workflows/frontend.yml/badge.svg)](https://github.com/imad-cyber/carbonsense/actions/workflows/frontend.yml)
 [![Deployed on Vercel](https://img.shields.io/badge/deployed%20on-Vercel-black)](https://carbonsense.vercel.app)
 
 CarbonSense tracks Scope 1, 2 and 3 greenhouse gas emissions for CSRD compliance reporting.
@@ -42,7 +42,7 @@ prediction with SHAP, and generates ESRS E1 disclosure narratives via a LangChai
 ## Quick Start (local)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/carbonsense.git && cd carbonsense
+git clone https://github.com/imad-cyber/carbonsense.git && cd carbonsense
 python -m venv venv && source venv/bin/activate     # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env                                # then edit values
