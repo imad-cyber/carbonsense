@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -56,5 +57,8 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Create model directory on startup if it doesn't exist
-Path(settings.MODEL_DIR).mkdir(exist_ok=True)
+# Writable model dir on Vercel serverless (/tmp is the only persistent-writable path)
+_model_dir = os.environ.get("MODEL_DIR") or settings.MODEL_DIR
+if os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV"):
+    _model_dir = "/tmp/models"
+Path(_model_dir).mkdir(parents=True, exist_ok=True)
