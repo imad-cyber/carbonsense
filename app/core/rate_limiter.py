@@ -1,8 +1,12 @@
+import os
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+from app.core.config import settings
 
 
 def get_rate_limit_key(request: Request) -> str:
@@ -24,13 +28,27 @@ def get_rate_limit_key(request: Request) -> str:
     return f"ip:{get_remote_address(request)}"
 
 
+def _rate_limit_storage_uri() -> str:
+    """Use Redis when available; fall back to in-memory on Vercel without Redis."""
+    redis_url = settings.REDIS_URL
+    is_serverless = os.getenv("VERCEL") == "1" or bool(os.getenv("VERCEL_ENV"))
+    if is_serverless and (
+        not redis_url or redis_url.startswith("redis://localhost")
+    ):
+        return "memory://"
+
+    if redis_url.endswith("/0"):
+        return f"{redis_url[:-1]}3"
+    if redis_url.rsplit("/", 1)[-1].isdigit():
+        return redis_url.rsplit("/", 1)[0] + "/3"
+    return f"{redis_url}/3"
+
+
 # Limiter instance — uses Redis as storage so limits persist
 # across multiple app instances (important for Kubernetes in Phase 10)
 limiter = Limiter(
     key_func=get_rate_limit_key,
-    storage_uri="redis://localhost:6379/3",
-    # /3 is a separate Redis DB so rate limit data
-    # doesn't mix with our cache data
+    storage_uri=_rate_limit_storage_uri(),
 )
 
 

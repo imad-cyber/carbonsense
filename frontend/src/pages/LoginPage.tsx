@@ -24,7 +24,7 @@ export function LoginPage() {
         </div>
 
         <p className="text-xs text-center text-gray-400 mt-6">
-          Demo admin: admin@carbonsense.io / admin1234
+          Demo admin: admin@carbonsense.fr / Admin1234
         </p>
       </div>
     </div>

@@ -1,17 +1,23 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
+
 from app.core.config import settings
 
-# The engine is the core interface to the database
-# pool_pre_ping = true means that sqlalchemy tests the connection before using it
-# this prevents "connection lost" errors in long running apps
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    pool_size=10, # max 10 persistent connections in the pool
-    max_overflow=20 # up to 20 extra connections if pool is full
-)
+_is_serverless = os.getenv("VERCEL") == "1" or bool(os.getenv("VERCEL_ENV"))
+
+# Serverless invocations must not hold a connection pool between requests.
+_engine_kwargs: dict = {"pool_pre_ping": True}
+if _is_serverless:
+    _engine_kwargs["poolclass"] = NullPool
+else:
+    _engine_kwargs["pool_size"] = 10
+    _engine_kwargs["max_overflow"] = 20
+
+engine = create_engine(settings.DATABASE_URL, **_engine_kwargs)
 
 # SessionLocal is the factory that creates new database sessions
 # Each request gets its own session - this is crucial for data safety.

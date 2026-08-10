@@ -25,6 +25,9 @@ frontend/dist/
 frontend/.vercel/
 frontend/.env.local
 
+# Vercel pulled env (contains secrets)
+.env.vercel.*
+
 # OS / editor
 .DS_Store
 Thumbs.db
