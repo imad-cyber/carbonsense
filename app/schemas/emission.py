@@ -3,6 +3,24 @@ from typing import Optional
 from datetime import datetime
 from app.models.emission import EmissionScope, EmissionCategory
 
+_ALLOWED_CATEGORIES = {
+    EmissionScope.SCOPE_1: {
+        EmissionCategory.STATIONARY_COMBUSTION, EmissionCategory.MOBILE_COMBUSTION,
+    },
+    EmissionScope.SCOPE_2: {
+        EmissionCategory.PURCHASED_ELECTRICITY, EmissionCategory.PURCHASED_HEAT,
+    },
+    EmissionScope.SCOPE_3: {
+        EmissionCategory.BUSINESS_TRAVEL, EmissionCategory.EMPLOYEE_COMMUTING,
+        EmissionCategory.SUPPLY_CHAIN, EmissionCategory.WASTE,
+    },
+}
+
+
+def check_scope_category(scope: EmissionScope, category: EmissionCategory) -> None:
+    if category not in _ALLOWED_CATEGORIES[scope]:
+        raise ValueError(f"Category {category.value} is not valid for {scope.value}")
+
 
 class EmissionRecordBase(BaseModel):
     scope: EmissionScope
@@ -39,28 +57,7 @@ class EmissionRecordBase(BaseModel):
         for certain scopes. This is domain logic, not just type checking.
         A model_validator runs after all individual field validators.
         """
-        scope_1_categories = {
-            EmissionCategory.STATIONARY_COMBUSTION,
-            EmissionCategory.MOBILE_COMBUSTION,
-        }
-        scope_2_categories = {
-            EmissionCategory.PURCHASED_ELECTRICITY,
-            EmissionCategory.PURCHASED_HEAT,
-        }
-        scope_3_categories = {
-            EmissionCategory.BUSINESS_TRAVEL,
-            EmissionCategory.EMPLOYEE_COMMUTING,
-            EmissionCategory.SUPPLY_CHAIN,
-            EmissionCategory.WASTE,
-        }
-
-        if self.scope == EmissionScope.SCOPE_1 and self.category not in scope_1_categories:
-            raise ValueError(f"Category {self.category} is not valid for Scope 1")
-        if self.scope == EmissionScope.SCOPE_2 and self.category not in scope_2_categories:
-            raise ValueError(f"Category {self.category} is not valid for Scope 2")
-        if self.scope == EmissionScope.SCOPE_3 and self.category not in scope_3_categories:
-            raise ValueError(f"Category {self.category} is not valid for Scope 3")
-
+        check_scope_category(self.scope, self.category)
         return self
 
 
@@ -81,6 +78,14 @@ class EmissionRecordResponse(EmissionRecordBase):
     company_id: int
     created_at: datetime
     updated_at: datetime
+    calc_method: str = "direct_input"
+    activity_quantity: Optional[float] = None
+    activity_unit: Optional[str] = None
+    emission_factor_id: Optional[int] = None
+    factor_kg_co2e_per_unit: Optional[float] = None
+    factor_unit: Optional[str] = None
+    factor_source_version: Optional[str] = None
+    factor_uncertainty_pct: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
@@ -117,3 +122,35 @@ class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
     message: str
+
+
+class ActivityEmissionCreate(BaseModel):
+    """Emissions calculated from activity data x an emission factor."""
+    company_id: int = Field(..., gt=0)
+    scope: EmissionScope
+    category: EmissionCategory
+    emission_factor_id: int = Field(..., gt=0)
+    quantity: float = Field(..., gt=0, description="Amount of activity, e.g. 12000")
+    unit: str = Field(..., min_length=1, max_length=50, examples=["kWh"])
+    reporting_year: int = Field(..., ge=2000, le=2100)
+    reporting_month: Optional[int] = Field(None, ge=1, le=12)
+    data_source: Optional[str] = Field(None, max_length=255)
+    notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_scope_category_match(self) -> "ActivityEmissionCreate":
+        check_scope_category(self.scope, self.category)
+        return self
+
+
+class CalculationBreakdown(BaseModel):
+    formula: str
+    co2_tonnes: float
+    co2_tonnes_low: Optional[float] = None
+    co2_tonnes_high: Optional[float] = None
+    note: str
+
+
+class ActivityEmissionResult(BaseModel):
+    record: EmissionRecordResponse
+    calculation: CalculationBreakdown

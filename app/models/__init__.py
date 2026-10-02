@@ -3,4 +3,5 @@
 # Alembic won't include it in migrations.
 from app.models.company import Company
 from app.models.emission import EmissionRecord
+from app.models.emission_factor import EmissionFactor
 from app.models.user import User

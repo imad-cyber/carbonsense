@@ -44,6 +44,7 @@ from app.core.security import create_access_token
 from app.models.company import Company, IndustrySector
 from app.models.user import User  # noqa: F401 — ensure table is registered
 from app.models.emission import EmissionRecord  # noqa: F401
+from app.models.emission_factor import EmissionFactor  # noqa: F401
 from app.core.cache import cache
 
 # ── Test database (shared in-memory SQLite) ─────────────────────────────────

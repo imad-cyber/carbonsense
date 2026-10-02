@@ -68,9 +68,37 @@ class EmissionRecord(TimestampMixin, Base):
     data_source = Column(String(255), nullable=True)  # "ERP export", "utility bill", "estimate"
     notes = Column(Text, nullable=True)
 
+    # --- How the number was produced (audit trail) ---
+    calc_method = Column(String(30), nullable=False, server_default="direct_input")
+    activity_quantity = Column(Float, nullable=True)
+    activity_unit = Column(String(50), nullable=True)
+    emission_factor_id = Column(
+        Integer, ForeignKey("emission_factors.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
+    # Snapshot of the factor at calculation time: later factor updates must not rewrite history
+    factor_kg_co2e_per_unit = Column(Float, nullable=True)
+    factor_unit = Column(String(50), nullable=True)
+    factor_source_version = Column(String(50), nullable=True)
+    factor_uncertainty_pct = Column(Float, nullable=True)
+
     # SQLAlchemy relationship — lets us do record.company to get the Company object
     # back_populates means Company will also have a .emission_records attribute
     company = relationship("Company", back_populates="emission_records")
+
+    # --- How the number was produced (audit trail) ---
+    calc_method = Column(String(30), nullable=False, server_default="direct_input")
+    activity_quantity = Column(Float, nullable=True)
+    activity_unit = Column(String(50), nullable=True)
+    emission_factor_id = Column(
+        Integer, ForeignKey("emission_factors.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
+    # Snapshot of the factor at calculation time: later factor updates must not rewrite history
+    factor_kg_co2e_per_unit = Column(Float, nullable=True)
+    factor_unit = Column(String(50), nullable=True)
+    factor_source_version = Column(String(50), nullable=True)
+    factor_uncertainty_pct = Column(Float, nullable=True)
 
     def __repr__(self):
         return (
