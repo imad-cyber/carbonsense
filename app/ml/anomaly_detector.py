@@ -7,6 +7,12 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Scale-free on purpose: raw co2_tonnes let large companies dominate the
+# isolation scores so drops in small series became invisible.
+# Experiment (anomaly_experiment.py) confirmed scale-free features raise
+# subtle-anomaly precision@k from 0.66 to 0.80.
+ANOMALY_FEATURES = ["z_score", "ratio_to_median", "mom_change", "reporting_month"]
+
 # RobustScaler: scales features using median and IQR instead of mean/std.
 # Why Robust over Standard? Emission data has outliers by definition —
 # StandardScaler would distort the scale for the majority of normal points.
@@ -64,13 +70,7 @@ def train_anomaly_detector(df: pd.DataFrame) -> tuple:
 
     df_features = build_anomaly_features(df)
 
-    feature_cols = [
-        "co2_tonnes",
-        "z_score",
-        "ratio_to_median",
-        "mom_change",
-        "reporting_month",
-    ]
+    feature_cols = ANOMALY_FEATURES
 
     X = df_features[feature_cols].fillna(0)
 

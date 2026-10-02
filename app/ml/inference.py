@@ -11,26 +11,26 @@ import logging
 import numpy as np
 import pandas as pd
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
 
 from app.ml.feature_engineering import (
     engineer_forecasting_features,
     get_feature_columns,
-    load_emission_dataframe,
 )
-from app.ml.anomaly_detector import build_anomaly_features
-from app.ml.explainability import explain_prediction, get_global_feature_importance
+from app.ml.anomaly_detector import ANOMALY_FEATURES, build_anomaly_features
+from app.ml.explainability import explain_prediction
+from app.ml.forecaster import CHALLENGER, predict_baseline, predict_challenger, ratio_features
 from app.ml.model_registry import load_model, model_exists
 
 logger = logging.getLogger(__name__)
 
-ANOMALY_FEATURE_COLS = [
-    "co2_tonnes",
-    "z_score",
-    "ratio_to_median",
-    "mom_change",
-    "reporting_month",
-]
+
+def _severity(ratio: float) -> str:
+    """Transparent rule based on size of deviation from the series median."""
+    if ratio >= 2.0 or ratio <= 0.5:
+        return "high"
+    if ratio >= 1.5 or ratio <= 0.67:
+        return "medium"
+    return "low"  # flagged for its pattern, not its size
 
 
 class EmissionInferenceService:
@@ -46,9 +46,10 @@ class EmissionInferenceService:
         self._forecasting_payload: dict | None = None
         self._anomaly_payload: dict | None = None
 
-    # ── Model loading ────────────────────────────────────────────────────
+    # ── Model loading ─────────────────────────────────────────────────────
 
-    def _get_forecasting_model(self):
+    def _load_forecasting(self) -> dict:
+        """Return the full forecasting bundle (champion, trend_factor, challenger, …)."""
         if self._forecasting_payload is None:
             self._forecasting_payload = load_model("forecasting")
         if self._forecasting_payload is None:
@@ -58,7 +59,8 @@ class EmissionInferenceService:
             )
         return self._forecasting_payload["model"]
 
-    def _get_anomaly_model(self):
+    def _load_anomaly(self):
+        """Return (IsolationForest, RobustScaler)."""
         if self._anomaly_payload is None:
             self._anomaly_payload = load_model("anomaly_detector")
         if self._anomaly_payload is None:
@@ -81,71 +83,69 @@ class EmissionInferenceService:
             "anomaly_detector": model_exists("anomaly_detector"),
         }
 
-    # ── Forecasting ──────────────────────────────────────────────────────
+    # ── Forecasting ───────────────────────────────────────────────────────
 
     def predict_emissions(
         self,
-        db: Session,
         company_id: int,
         scope: str,
         category: str,
         reporting_year: int,
         reporting_month: int,
+        recent_records: list[dict],
     ) -> dict:
         """
         Forecast CO2 emissions for one company/scope/category/month.
 
-        Builds the same features used at training time by appending the
-        future period to the company's history, engineering features and
-        taking the final row. Raises ValueError with < 12 history records.
+        Returns both the baseline forecast and the challenger forecast so the
+        caller can see when they disagree.  The model_used field says which one
+        is the current champion.
+
+        Accepts pre-fetched records so the method is DB-free and testable.
+        Only the month immediately after the latest data is supported.
         """
-        model = self._get_forecasting_model()
+        bundle = self._load_forecasting()
 
-        df = load_emission_dataframe(db, company_id=company_id)
-        if not df.empty:
-            df = df[(df["scope"] == scope) & (df["category"] == category)]
-
-        if df.empty or len(df) < 12:
+        # Filter to the requested series
+        series = [
+            r for r in recent_records
+            if r["company_id"] == company_id
+            and r["scope"] == scope
+            and r["category"] == category
+        ]
+        if len(series) < 13:
             raise ValueError(
-                f"Need at least 12 months of history for company {company_id}, "
-                f"{scope}/{category} — found {0 if df.empty else len(df)} records."
+                f"Need at least 13 months of history for {scope}/{category}; "
+                f"found {len(series)}."
             )
 
-        future_row = pd.DataFrame([{
-            "id": -1,
-            "company_id": company_id,
-            "scope": scope,
-            "category": category,
-            "co2_tonnes": np.nan,
-            "reporting_year": reporting_year,
-            "reporting_month": reporting_month,
-            "data_source": "forecast",
-        }])
-        df_all = pd.concat([df, future_row], ignore_index=True)
+        # Validate that only the next sequential month is requested
+        last = max(series, key=lambda r: (r["reporting_year"], r["reporting_month"]))
+        nxt = last["reporting_year"] * 12 + (last["reporting_month"] - 1) + 1
+        expected = (nxt // 12, nxt % 12 + 1)
+        if (reporting_year, reporting_month) != expected:
+            raise ValueError(
+                f"Forecast supports only the next month after the latest data: "
+                f"{expected[0]}-{expected[1]:02d}."
+            )
 
-        df_features = engineer_forecasting_features(df_all)
-        target_row = df_features[df_features["id"] == -1]
-        if target_row.empty:
-            raise ValueError("Failed to build features for the forecast period")
-
-        # Rolling stats over NaN target propagate — backfill from history
-        history_features = df_features[df_features["id"] != -1]
-        fill_values = {
-            "lag_1_month": history_features["co2_tonnes"].iloc[-1],
-            "lag_12_months": history_features["co2_tonnes"].tail(12).iloc[0],
-            "rolling_mean_3m": history_features["co2_tonnes"].tail(3).mean(),
-            "rolling_std_12m": history_features["co2_tonnes"].tail(12).std() or 0.0,
-            "yoy_change": 0.0,
+        target = {
+            "company_id": company_id, "scope": scope, "category": category,
+            "co2_tonnes": 0.0,  # placeholder; features no longer read it
+            "reporting_year": reporting_year, "reporting_month": reporting_month,
         }
-        target_row = target_row.fillna(fill_values)
+        df_features = engineer_forecasting_features(pd.DataFrame(series + [target]))
+        mask = (
+            (df_features["reporting_year"] == reporting_year)
+            & (df_features["reporting_month"] == reporting_month)
+        )
+        X_raw = df_features[mask].tail(1).reindex(columns=get_feature_columns(), fill_value=0)
 
-        X_row = target_row.reindex(columns=get_feature_columns(), fill_value=0)
-        X_row = X_row.fillna(0).astype(float)
-
-        prediction = float(model.predict(X_row)[0])
-        prediction = max(prediction, 0.0)  # emissions cannot be negative
-
-        explanation = explain_prediction(model, X_row)
+        lag12 = float(X_raw["lag_12_months"].iloc[0])
+        baseline_val = float(predict_baseline(X_raw, bundle["trend_factor"]).iloc[0])
+        challenger_val = float(predict_challenger(bundle["challenger"], X_raw).iloc[0])
+        champion = bundle["champion"]
+        served = challenger_val if champion == CHALLENGER else baseline_val
 
         return {
             "company_id": company_id,
@@ -153,109 +153,83 @@ class EmissionInferenceService:
             "category": category,
             "reporting_year": reporting_year,
             "reporting_month": reporting_month,
-            "predicted_co2_tonnes": round(prediction, 2),
-            "explanation": explanation,
+            "predicted_co2_tonnes": round(max(served, 0.0), 2),
+            "model_used": champion,
+            "models_disagree": abs(challenger_val - baseline_val) / max(baseline_val, 1e-9) > 0.15,
+            "baseline": {
+                "method": "same month last year x trend factor",
+                "same_month_last_year": round(lag12, 2),
+                "trend_factor": round(bundle["trend_factor"], 4),
+                "forecast": round(baseline_val, 2),
+            },
+            "challenger": {
+                "forecast": round(challenger_val, 2),
+                "shap_on_log_ratio_to_last_year": explain_prediction(
+                    bundle["challenger"], ratio_features(X_raw)
+                ),
+            },
         }
 
-    # ── Anomaly detection ────────────────────────────────────────────────
+    # ── Anomaly detection ─────────────────────────────────────────────────
 
-    def detect_anomalies(self, db: Session, company_id: int, year: int) -> dict:
+    def detect_anomalies(self, records: list[dict]) -> list[dict]:
         """
-        Score all of a company's records for a given year with the
-        Isolation Forest. Features are computed over the company's FULL
-        history so group statistics (z-score, ratio-to-median) are stable.
+        Score a list of emission records for anomalies.
+
+        The full company history must be passed in so that group statistics
+        (z-score, ratio-to-median) are stable — the same as in training.
+        Caller is responsible for filtering the returned list to the desired
+        year.
+
+        Uses scale-free features (no raw co2_tonnes) so large companies don't
+        crowd out small-series anomalies.  Each flagged record gets a plain-
+        language reason: how many times the series median it was.
         """
-        model, scaler = self._get_anomaly_model()
+        model, scaler = self._load_anomaly()
 
-        df = load_emission_dataframe(db, company_id=company_id)
-        if df.empty:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No emission records found for company {company_id}",
-            )
+        df = pd.DataFrame(records)
+        # build_anomaly_features sorts rows internally; sort_index restores
+        # the original input order so scores align with `records` positionally
+        df_features = build_anomaly_features(df).sort_index()
+        X_scaled = scaler.transform(df_features[ANOMALY_FEATURES].fillna(0))
 
-        df_features = build_anomaly_features(df)
-        df_year = df_features[df_features["reporting_year"] == year]
-        if df_year.empty:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No emission records for company {company_id} in {year}",
-            )
+        predictions = model.predict(X_scaled)       # -1 = anomaly, 1 = normal
+        scores = model.score_samples(X_scaled)      # higher = more normal
+        ratios = df_features["ratio_to_median"].to_numpy()
 
-        X = df_year[ANOMALY_FEATURE_COLS].fillna(0)
-        X_scaled = scaler.transform(X)
-
-        predictions = model.predict(X_scaled)         # -1 = anomaly, 1 = normal
-        scores = model.decision_function(X_scaled)    # lower = more anomalous
-
-        records = []
-        anomaly_count = 0
-        for (_, row), pred, score in zip(df_year.iterrows(), predictions, scores, strict=False):
-            is_anomaly = bool(pred == -1)
-            severity = None
-            if is_anomaly:
-                anomaly_count += 1
-                if score < -0.10:
-                    severity = "high"
-                elif score < -0.03:
-                    severity = "medium"
-                else:
-                    severity = "low"
+        results = []
+        for i, record in enumerate(records):
+            flagged = bool(predictions[i] == -1)
+            severity = _severity(float(ratios[i])) if flagged else None
+            if flagged:
                 try:
                     from app.core.metrics import anomalies_detected_total
                     anomalies_detected_total.labels(
-                        severity=severity, scope=str(row["scope"])
+                        severity=severity, scope=str(record.get("scope", ""))
                     ).inc()
                 except Exception:  # noqa: BLE001 — metrics must never break inference
                     pass
 
-            records.append({
-                "record_id": int(row["id"]),
-                "company_id": int(row["company_id"]),
-                "scope": str(row["scope"]),
-                "category": str(row["category"]),
-                "co2_tonnes": float(row["co2_tonnes"]),
-                "reporting_year": int(row["reporting_year"]),
-                "reporting_month": int(row["reporting_month"]),
-                "anomaly_score": round(float(score), 4),
-                "is_anomaly": is_anomaly,
+            results.append({
+                **record,
+                "anomaly_score": round(float(scores[i]), 4),
+                "is_anomaly": flagged,
                 "anomaly_severity": severity,
+                "times_series_median": round(float(ratios[i]), 2),
             })
+        return results
 
-        total = len(records)
-        return {
-            "company_id": company_id,
-            "year": year,
-            "total_records": total,
-            "anomaly_count": anomaly_count,
-            "anomaly_rate": round(anomaly_count / total, 4) if total else 0.0,
-            "records": records,
-        }
+    # ── Explainability ────────────────────────────────────────────────────
 
-    # ── Explainability ───────────────────────────────────────────────────
+    def get_feature_importance(self) -> list[dict]:
+        """
+        Mean |SHAP| of the challenger model, pre-computed at train time.
 
-    def get_feature_importance(self, db: Session, n_top: int = 15) -> dict:
-        """Global mean(|SHAP|) feature importance for the forecasting model."""
-        model = self._get_forecasting_model()
-
-        df = load_emission_dataframe(db)
-        if df.empty:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No emission data available to compute feature importance",
-            )
-
-        df_features = engineer_forecasting_features(df)
-        df_clean = df_features.dropna(subset=["lag_1_month", "lag_12_months"])
-        if df_clean.empty:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Not enough historical data to compute feature importance",
-            )
-
-        X = df_clean.reindex(columns=get_feature_columns(), fill_value=0).fillna(0)
-        importance = get_global_feature_importance(model, X, n_top=n_top)
-        return {"feature_importance": importance}
+        Returning pre-computed importance avoids the old bug of computing SHAP
+        on an all-zeros frame (which made every feature look equally unimportant).
+        """
+        bundle = self._load_forecasting()
+        return bundle.get("feature_importance", [])
 
 
 # Module-level singleton — one instance shared across the app

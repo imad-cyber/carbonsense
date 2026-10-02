@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Any
 from app.models.emission import EmissionScope, EmissionCategory
 
 
@@ -26,6 +26,18 @@ class PredictionExplanation(BaseModel):
     explanation_method: str
 
 
+class BaselineForecast(BaseModel):
+    method: str
+    same_month_last_year: float
+    trend_factor: float
+    forecast: float
+
+
+class ChallengerForecast(BaseModel):
+    forecast: float
+    shap_on_log_ratio_to_last_year: PredictionExplanation
+
+
 class ForecastResponse(BaseModel):
     company_id: int
     scope: str
@@ -33,7 +45,10 @@ class ForecastResponse(BaseModel):
     reporting_year: int
     reporting_month: int
     predicted_co2_tonnes: float
-    explanation: PredictionExplanation
+    model_used: str
+    models_disagree: bool
+    baseline: BaselineForecast
+    challenger: ChallengerForecast
 
 
 class AnomalyScanRequest(BaseModel):
@@ -43,7 +58,7 @@ class AnomalyScanRequest(BaseModel):
 
 
 class AnomalyRecordResult(BaseModel):
-    record_id: int
+    record_id: Optional[int] = None
     company_id: int
     scope: str
     category: str
@@ -53,6 +68,7 @@ class AnomalyRecordResult(BaseModel):
     anomaly_score: float
     is_anomaly: bool
     anomaly_severity: Optional[str] = None
+    times_series_median: float
 
 
 class AnomalyScanResponse(BaseModel):

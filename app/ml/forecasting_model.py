@@ -4,13 +4,14 @@ import mlflow.xgboost
 import pandas as pd
 import numpy as np
 from xgboost import XGBRegressor
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.model_selection import TimeSeriesSplit  # noqa: F401 kept for reference
 from sklearn.metrics import (
     mean_absolute_error,
     mean_squared_error,
     r2_score,
 )
 from app.core.config import settings
+from app.ml.feature_engineering import temporal_holdout_mask
 
 logger = logging.getLogger(__name__)
 
@@ -112,16 +113,10 @@ def train_with_mlflow(
     mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
     mlflow.set_experiment(settings.MLFLOW_EXPERIMENT_NAME)
 
-    # TimeSeriesSplit: 5 folds, always future-forward
-    # We use the last fold as our train/val split
-    tscv = TimeSeriesSplit(n_splits=5)
-    splits = list(tscv.split(X))
-    train_idx, val_idx = splits[-1]  # last split = most recent validation
-
-    X_train = X.iloc[train_idx]
-    y_train = y.iloc[train_idx]
-    X_val = X.iloc[val_idx]
-    y_val = y.iloc[val_idx]
+    # Use the shared holdout definition — same boundary as evaluate_forecasting
+    train_mask = temporal_holdout_mask(X)
+    X_train, y_train = X[train_mask], y[train_mask]
+    X_val, y_val = X[~train_mask], y[~train_mask]
 
     with mlflow.start_run() as run:
         run_id = run.info.run_id
@@ -133,7 +128,7 @@ def train_with_mlflow(
             "max_depth": 6,
             "learning_rate": 0.05,
             "subsample": 0.8,
-            "cv_folds": 5,
+            "split": "last_6_months_holdout",
             "train_size": len(X_train),
             "val_size": len(X_val),
         })

@@ -81,8 +81,8 @@ def test_anomaly_detection_returns_scores():
     assert predictions[-1] == -1
 
 
-def test_forecast_requires_history(db_session):
-    """predict_emissions raises ValueError with < 12 history records."""
+def test_forecast_requires_history():
+    """predict_emissions raises ValueError with insufficient history records."""
     from xgboost import XGBRegressor
 
     from app.ml.inference import EmissionInferenceService
@@ -99,14 +99,14 @@ def test_forecast_requires_history(db_session):
     save_model(dummy_model, "forecasting", metadata={"test": True})
 
     service = EmissionInferenceService()
-    with pytest.raises(ValueError, match="12 months"):
+    with pytest.raises(ValueError, match="13 months"):
         service.predict_emissions(
-            db_session,
-            company_id=999_999,  # no records for this company
+            company_id=999_999,
             scope="scope_1",
             category="stationary_combustion",
             reporting_year=2025,
             reporting_month=6,
+            recent_records=[],  # no history for this series
         )
 
 

@@ -80,31 +80,29 @@ def engineer_forecasting_features(df: pd.DataFrame) -> pd.DataFrame:
     # This is the single most powerful feature for time-series forecasting.
     # The model learns: "if emissions were high last January, they'll
     # probably be high this January too."
-    df = df.sort_values(["company_id", "scope", "category",
-                         "reporting_year", "reporting_month"])
-
-    # Group by company+scope+category to compute lags within each series
+    df = df.sort_values(
+        ["company_id", "scope", "category", "reporting_year", "reporting_month"]
+    )
     group_cols = ["company_id", "scope", "category"]
-    df["lag_1_month"] = df.groupby(group_cols)["co2_tonnes"].shift(1)
-    df["lag_12_months"] = df.groupby(group_cols)["co2_tonnes"].shift(12)
+    g = df.groupby(group_cols)["co2_tonnes"]
 
-    # ── Rolling statistics ────────────────────────────────────────────────
-    # 3-month rolling mean: smooths noise, captures trend direction
-    df["rolling_mean_3m"] = (
-        df.groupby(group_cols)["co2_tonnes"]
-        .transform(lambda x: x.rolling(3, min_periods=1).mean())
-    )
-    # 12-month rolling std: captures emission volatility
-    df["rolling_std_12m"] = (
-        df.groupby(group_cols)["co2_tonnes"]
-        .transform(lambda x: x.rolling(12, min_periods=1).std().fillna(0))
-    )
+    # Lags only look at the past
+    df["lag_1_month"] = g.shift(1)
+    df["lag_12_months"] = g.shift(12)
+    df["_lag_13"] = g.shift(13)  # helper column, not a model feature
 
-    # ── YoY change ────────────────────────────────────────────────────────
-    # Year-over-year percent change — encodes the reduction trend
+    # Rolling stats run on the series shifted by one month,
+    # so row t never sees its own value
+    df["rolling_mean_3m"] = g.transform(
+        lambda s: s.shift(1).rolling(3, min_periods=1).mean()
+    )
+    df["rolling_std_12m"] = g.transform(
+        lambda s: s.shift(1).rolling(12, min_periods=2).std()
+    ).fillna(0)
+
+    # Last month's year-over-year change: known at prediction time
     df["yoy_change"] = (
-        (df["co2_tonnes"] - df["lag_12_months"]) /
-        df["lag_12_months"].replace(0, np.nan)
+        (df["lag_1_month"] - df["_lag_13"]) / df["_lag_13"].replace(0, np.nan)
     ).fillna(0)
 
     return df
@@ -171,3 +169,14 @@ def prepare_features_and_target(
     y = df_clean["co2_tonnes"]
 
     return X, y
+
+
+def temporal_holdout_mask(X: pd.DataFrame, holdout_months: int = 6) -> pd.Series:
+    """True for training rows, False for the most recent `holdout_months` months.
+
+    Shared between train_with_mlflow and evaluate_forecasting so both always
+    split on exactly the same calendar boundary — prevents the evaluation from
+    accidentally scoring the model on rows it trained on.
+    """
+    period = X["reporting_year"] * 12 + X["reporting_month"]
+    return period < (period.max() - holdout_months + 1)

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+    RATE_LIMIT_STORAGE_URL: str = "redis://localhost:6379/3"
     CACHE_TTL_SUMMARY: int = 900
     CACHE_TTL_COMPANY_LIST: int = 300
 
@@ -29,10 +30,9 @@ class Settings(BaseSettings):
     # Where trained model files are saved on disk
     MODEL_DIR: str = "models"
 
-    # Minimum model performance to accept a new model
-    # If R² drops below this, we reject the new model and keep the old one
-    # This is called a "model quality gate" — it's in every MLOps pipeline
-    MIN_FORECAST_R2: float = 0.70
+    # Minimum improvement the challenger must achieve over the baseline
+    # on EVERY rolling fold to be promoted to champion.
+    PROMOTION_MARGIN_PP: float = 0.5
     ANOMALY_CONTAMINATION: float = 0.05  # expected % of anomalies in data
 
     # RAG / LLM settings (Phase 7)

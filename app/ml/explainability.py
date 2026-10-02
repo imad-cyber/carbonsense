@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import shap
 from xgboost import XGBRegressor
-from app.ml.feature_engineering import get_feature_columns
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +37,13 @@ def explain_prediction(
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X_row)
 
-    feature_names = get_feature_columns()
+    # Use the actual column names from X_row so this works for both the
+    # standard feature set and the challenger's ratio features
+    feature_names = list(X_row.columns)
 
-    # Build a ranked list of feature contributions
     contributions = []
     for feat_name, shap_val in zip(feature_names, shap_values[0], strict=False):
-        if abs(shap_val) > 0.01:  # ignore negligible contributions
+        if abs(shap_val) > 1e-4:  # 0.01 would hide all log-unit SHAP values
             contributions.append({
                 "feature": feat_name,
                 "feature_value": float(X_row.iloc[0][feat_name])
@@ -79,12 +79,12 @@ def get_global_feature_importance(
     """
     explainer = shap.TreeExplainer(model)
 
-    # Sample for speed if dataset is large
     X_sample = X.sample(min(500, len(X)), random_state=42)
     shap_values = explainer.shap_values(X_sample)
 
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
-    feature_names = get_feature_columns()
+    # Use actual column names from X, not a hardcoded list
+    feature_names = list(X.columns)
 
     importance = [
         {
