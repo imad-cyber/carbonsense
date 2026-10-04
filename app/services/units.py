@@ -13,8 +13,20 @@ class UnitMismatchError(ValueError):
     pass
 
 
+_ENERGY = {
+    "kwh": 1.0,
+    "mwh": 1_000.0,
+    "gwh": 1_000_000.0,
+    "mj": 1 / 3.6,        # 1 kWh = 3.6 MJ exactly
+    "gj": 1_000 / 3.6,
+}
+
 _DIMENSIONS = {
-    "energy": {"kwh": 1.0, "mwh": 1_000.0, "gwh": 1_000_000.0},
+    "energy": _ENERGY,
+    # PCI and PCS are different heating-value bases: convert inside one basis only.
+    # (tep is deliberately not converted; its definition needs checking first.)
+    "energy_pci": {f"{u} pci": f for u, f in _ENERGY.items()},
+    "energy_pcs": {f"{u} pcs": f for u, f in _ENERGY.items()},
     "mass": {"kg": 1.0, "t": 1_000.0},
     "volume": {"l": 1.0, "m3": 1_000.0},
     "distance": {"km": 1.0, "m": 0.001},
@@ -22,6 +34,7 @@ _DIMENSIONS = {
 _ALIASES = {
     "litre": "l", "litres": "l", "liter": "l", "liters": "l",
     "m³": "m3", "tonne": "t", "tonnes": "t",
+    "tonne.km": "t.km", "tonnes.km": "t.km",   # same unit, two spellings in ADEME's data
 }
 _LOOKUP = {
     unit: (dim, factor)

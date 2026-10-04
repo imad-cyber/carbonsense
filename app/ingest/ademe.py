@@ -20,6 +20,8 @@ SKIP_NO_NAME = "missing_name"
 SKIP_NO_UNIT = "missing_unit"
 SKIP_UNIT_FORMAT = "unit_not_kgco2e_per_something"
 SKIP_NO_TOTAL = "missing_total"
+SKIP_NOT_POSTE = "not_a_poste_row"
+SKIP_NO_POST_TYPE = "missing_post_type"
 
 
 @lru_cache(maxsize=8192)
@@ -81,6 +83,7 @@ class ParsedFactor:
     kg_co2e_per_unit: float
     uncertainty_pct: float | None
     geography: str | None
+    sub_geography: str | None
     status: str | None
     category_path: str | None
     valid_until: date | None
@@ -124,8 +127,52 @@ def parse_row(row: dict) -> tuple[ParsedFactor | None, str | None]:
         kg_co2e_per_unit=total,
         uncertainty_pct=to_float(r.get("incertitude")),
         geography=clean_text(r.get("localisation_geographique")) or None,
+        sub_geography=clean_text(r.get("sous_localisation_geographique_francais")) or None,
         status=clean_text(r.get("statut_de_l_element")) or None,
         category_path=clean_text(r.get("code_de_la_categorie")) or None,
         valid_until=parse_date(r.get("periode_de_validite")),
         raw={k: v for k, v in row.items() if not k.startswith("_")},
+    ), None
+
+GAS_KEYS = ("co2f", "ch4f", "ch4b", "n2o", "co2b", "autres_ges")
+
+
+@dataclass
+class ParsedComponent:
+    source_id: str
+    post_type: str
+    post_name: str | None
+    kg_co2e_per_unit: float
+    gases: dict
+
+
+def parse_component(row: dict) -> tuple[ParsedComponent | None, str | None]:
+    """Parses a 'Poste' row (one component of a factor). Returns (component, None) or (None, reason)."""
+    r = {norm(k): v for k, v in row.items()}
+
+    if norm(r.get("type_ligne") or "") != "poste":
+        return None, SKIP_NOT_POSTE
+    if norm(r.get("type_de_l_element") or "") != "facteur_d_emission":
+        return None, SKIP_NOT_FACTOR
+    source_id = clean_text(r.get("identifiant_de_l_element"))
+    if not source_id:
+        return None, SKIP_NO_ID
+    post_type = clean_text(r.get("type_poste"))
+    if not post_type:
+        return None, SKIP_NO_POST_TYPE
+    total = to_float(r.get("total_poste_non_decompose"))
+    if total is None:
+        return None, SKIP_NO_TOTAL
+
+    gases = {}
+    for key in GAS_KEYS:
+        value = to_float(r.get(key))
+        if value:
+            gases[key] = value
+    return ParsedComponent(
+        source_id=source_id,
+        post_type=post_type,
+        post_name=clean_text(r.get("nom_poste_francais")) or None,
+        kg_co2e_per_unit=total,
+        gases=gases,
     ), None

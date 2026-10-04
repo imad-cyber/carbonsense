@@ -23,7 +23,12 @@ class EmissionFactorService:
     ) -> tuple[list[EmissionFactor], int]:
         query = db.query(EmissionFactor)
         if q:
-            query = query.filter(EmissionFactor.name.ilike(_like(q), escape="\\"))
+            query = query.filter(
+                or_(
+                    EmissionFactor.name.ilike(_like(q), escape="\\"),
+                    EmissionFactor.sub_geography.ilike(_like(q), escape="\\"),
+                )
+            )
         if unit:
             query = query.filter(func.lower(EmissionFactor.unit) == unit.lower())
         if geography:

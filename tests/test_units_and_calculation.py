@@ -64,3 +64,26 @@ def test_negative_factor_is_rejected():
 def test_unit_mismatch_propagates():
     with pytest.raises(UnitMismatchError):
         calculate_emissions(1, "kg", 0.05, "kWh")
+
+def test_conversion_inside_a_heating_value_basis():
+    assert convert_quantity(2, "MWh PCS", "kWh PCS") == pytest.approx(2000)
+    assert convert_quantity(1, "GJ PCI", "kWh PCI") == pytest.approx(277.7778, rel=1e-5)
+
+
+def test_pci_and_pcs_are_never_mixed():
+    with pytest.raises(UnitMismatchError):
+        convert_quantity(1, "kWh PCI", "kWh PCS")
+
+
+def test_case_variants_of_ademe_units_match():
+    assert convert_quantity(4, "KWh PCI", "kWh PCI") == 4
+    assert convert_quantity(4, "Litre", "litre") == 4
+
+
+def test_tonne_km_spellings_are_the_same_unit():
+    assert convert_quantity(7, "tonne.km", "t.km") == 7
+
+
+def test_tep_is_not_converted():
+    with pytest.raises(UnitMismatchError):
+        convert_quantity(1, "tep PCI", "kWh PCI")

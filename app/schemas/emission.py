@@ -149,6 +149,7 @@ class CalculationBreakdown(BaseModel):
     co2_tonnes_low: Optional[float] = None
     co2_tonnes_high: Optional[float] = None
     note: str
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ActivityEmissionResult(BaseModel):

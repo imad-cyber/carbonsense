@@ -9,6 +9,7 @@ from app.schemas.emission import (
     CalculationBreakdown,
 )
 from app.services.activity_emission_service import ActivityEmissionService
+from app.services.factor_checks import factor_warnings
 
 router = APIRouter(prefix="/emissions", tags=["Emissions"])
 
@@ -34,6 +35,11 @@ def create_emission_from_activity(
         f" x {factor.kg_co2e_per_unit:g} kg CO2e/{factor.unit}"
         f" = {calc.co2_tonnes:.6g} t CO2e"
     )
+    source_label = (
+        "ADEME Base Carbone (Licence Ouverte 2.0)"
+        if factor.source == "ADEME_BASE_CARBONE" else factor.source
+    )
+    where = f" ({factor.sub_geography})" if factor.sub_geography else ""
     return ActivityEmissionResult(
         record=record,
         calculation=CalculationBreakdown(
@@ -42,8 +48,15 @@ def create_emission_from_activity(
             co2_tonnes_low=None if calc.co2_tonnes_low is None else round(calc.co2_tonnes_low, 6),
             co2_tonnes_high=None if calc.co2_tonnes_high is None else round(calc.co2_tonnes_high, 6),
             note=(
-                f"Source: {factor.source} {factor.source_version}. The range reflects "
-                "the factor's stated uncertainty only, not errors in the activity data."
+                f"Factor {factor.source_id}: {factor.name}{where}. Source: {source_label}, "
+                f"version {factor.source_version}. The range reflects the factor's stated "
+                "uncertainty only, not errors in the activity data."
+            ),
+            warnings=factor_warnings(
+                status=factor.status,
+                valid_until=factor.valid_until,
+                uncertainty_pct=factor.uncertainty_pct,
+                reporting_year=payload.reporting_year,
             ),
         ),
     )

@@ -1,6 +1,7 @@
 from datetime import date
 from app.ingest.ademe import (
     SKIP_NOT_ELEMENT, SKIP_NOT_FACTOR, SKIP_NO_TOTAL, SKIP_UNIT_FORMAT,
+    SKIP_NOT_POSTE, parse_component,
     clean_text, full_name, norm, parse_date, parse_factor_unit, parse_row, to_float,
 )
 
@@ -104,3 +105,37 @@ def test_missing_uncertainty_stays_none():
     del row["Incertitude"]
     factor, _ = parse_row(row)
     assert factor.uncertainty_pct is None
+
+def make_poste(**overrides):
+    row = {
+        "Type_Ligne": "Poste",
+        "Identifiant_de_l'élément": "99001",
+        "Type_de_l'élément": "Facteur d'émission",
+        "Type_poste": "Combustion",
+        "Nom_poste_français": "",
+        "Total_poste_non_décomposé": 0.344,
+        "CO2f": 0.344, "CH4f": 0, "N2O": 0,
+    }
+    row.update(overrides)
+    return row
+
+
+def test_component_is_parsed_and_zero_gases_are_dropped():
+    c, reason = parse_component(make_poste())
+    assert reason is None
+    assert (c.source_id, c.post_type, c.kg_co2e_per_unit) == ("99001", "Combustion", 0.344)
+    assert c.gases == {"co2f": 0.344}
+    assert c.post_name is None
+
+
+def test_element_rows_are_not_components():
+    assert parse_component(make_row()) == (None, SKIP_NOT_POSTE)
+
+
+def test_component_without_total_is_reported():
+    assert parse_component(make_poste(**{"Total_poste_non_décomposé": None})) == (None, SKIP_NO_TOTAL)
+
+
+def test_sub_geography_is_kept():
+    factor, _ = parse_row(make_row(**{"Sous-localisation_géographique_français": "Allemagne"}))
+    assert factor.sub_geography == "Allemagne"

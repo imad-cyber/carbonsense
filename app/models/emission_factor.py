@@ -1,4 +1,7 @@
-from sqlalchemy import JSON, Column, Date, Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON, Column, Date, Float, ForeignKey, Integer, String, Text, UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
 from app.db.database import Base
 from app.models.base import TimestampMixin
 
@@ -19,10 +22,33 @@ class EmissionFactor(TimestampMixin, Base):
     kg_co2e_per_unit = Column(Float, nullable=False)
     uncertainty_pct = Column(Float, nullable=True)
     geography = Column(String(100), nullable=True)
+    sub_geography = Column(String(255), nullable=True)   # often the country
     status = Column(String(50), nullable=True)
     category_path = Column(Text, nullable=True)   # e.g. "Combustibles > Gaz naturel > ..."
     valid_until = Column(Date, nullable=True)     # the source's "Période de validité"
     raw = Column(JSON, nullable=True)                          # original row, for audit
 
+    components = relationship(
+        "EmissionFactorComponent", back_populates="factor", cascade="all, delete-orphan"
+    )
+
     def __repr__(self):
         return f"<EmissionFactor {self.source}:{self.source_id} {self.kg_co2e_per_unit} kgCO2e/{self.unit}>"
+
+
+class EmissionFactorComponent(Base):
+    """One 'poste' of a factor (e.g. Combustion, Amont); the posts add up to the factor's total."""
+    __tablename__ = "emission_factor_components"
+
+    id = Column(Integer, primary_key=True)
+    emission_factor_id = Column(
+        Integer, ForeignKey("emission_factors.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    post_type = Column(String(100), nullable=False)
+    post_name = Column(String(255), nullable=True)
+    kg_co2e_per_unit = Column(Float, nullable=False)
+    gases = Column(JSON, nullable=True)   # non-zero gas values (co2f, ch4f, co2b, ...)
+
+    factor = relationship("EmissionFactor", back_populates="components")
+

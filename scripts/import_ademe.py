@@ -16,7 +16,10 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.stdout.reconfigure(encoding="utf-8")
 
-from app.ingest.ademe import SKIP_UNIT_FORMAT, clean_text, norm, parse_row, to_float
+from app.ingest.ademe import (
+    SKIP_NOT_ELEMENT, SKIP_UNIT_FORMAT, SOURCE,
+    clean_text, norm, parse_component, parse_row, to_float,
+)
 
 API_BASE = "https://data.ademe.fr/data-fair/api/v1/datasets/base-carboner"
 DATA_FILE = Path("data/base_carbone.jsonl")
@@ -200,6 +203,148 @@ def report() -> None:
     print(f"wrote {REPORT_FILE} ({len(out)} lines)")
 
 
+def _chunks(items: list, size: int = 1000):
+    for i in range(0, len(items), size):
+        yield items[i : i + size]
+
+
+def load() -> None:
+    """
+    Insert-only and idempotent per version: factors from this snapshot are added once.
+    A newer snapshot gets a new version string, so older factors stay in place and
+    existing emission records keep pointing at exactly what they were calculated with.
+    """
+    from sqlalchemy import insert
+    from app.db.database import SessionLocal
+    from app.models.emission_factor import EmissionFactor, EmissionFactorComponent
+
+    meta = json.loads(META_FILE.read_text(encoding="utf-8"))
+    version = f"base-carbone@{meta['dataUpdatedAt'][:10]}"
+    with DATA_FILE.open(encoding="utf-8") as fh:
+        rows = [json.loads(line) for line in fh]
+
+    factors, components, skipped = {}, defaultdict(list), Counter()
+    for row in rows:
+        factor, reason = parse_row(row)
+        if factor:
+            factors[factor.source_id] = factor
+            continue
+        if reason == SKIP_NOT_ELEMENT:
+            component, reason = parse_component(row)
+            if component:
+                components[component.source_id].append(component)
+                continue
+        skipped[reason] += 1
+    orphans = sum(len(v) for k, v in components.items() if k not in factors)
+
+    db = SessionLocal()
+    try:
+        scope = (EmissionFactor.source == SOURCE, EmissionFactor.source_version == version)
+        existing = {sid for (sid,) in db.query(EmissionFactor.source_id).filter(*scope)}
+        new = [f for sid, f in factors.items() if sid not in existing]
+        print(f"{version}: {len(factors)} parsed | {len(existing)} already loaded | {len(new)} to insert")
+
+        for chunk in _chunks(new):
+            db.execute(insert(EmissionFactor), [
+                {
+                    "source": SOURCE, "source_id": f.source_id, "source_version": version,
+                    "name": f.name, "unit": f.unit, "kg_co2e_per_unit": f.kg_co2e_per_unit,
+                    "uncertainty_pct": f.uncertainty_pct, "geography": f.geography,
+                    "sub_geography": f.sub_geography, "status": f.status,
+                    "category_path": f.category_path, "valid_until": f.valid_until,
+                    "raw": f.raw,
+                }
+                for f in chunk
+            ])
+        db.flush()
+
+        id_map = dict(db.query(EmissionFactor.source_id, EmissionFactor.id).filter(*scope))
+        new_ids = {f.source_id for f in new}
+        comp_rows = [
+            {
+                "emission_factor_id": id_map[sid], "post_type": c.post_type,
+                "post_name": c.post_name, "kg_co2e_per_unit": c.kg_co2e_per_unit,
+                "gases": c.gases or None,
+            }
+            for sid, cs in components.items() if sid in new_ids
+            for c in cs
+        ]
+        for chunk in _chunks(comp_rows):
+            db.execute(insert(EmissionFactorComponent), chunk)
+        db.commit()
+        print(f"inserted {len(new)} factors and {len(comp_rows)} components")
+        print(f"skipped rows: {dict(skipped)} | component rows without a factor: {orphans}")
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def verify() -> None:
+    """Checks the loaded data and writes ademe_verify.txt."""
+    from sqlalchemy import func, text
+    from app.db.database import SessionLocal
+    from app.models.emission_factor import EmissionFactor
+
+    db = SessionLocal()
+    out: list[str] = []
+    add = out.append
+    try:
+        add("== FACTORS BY VERSION / STATUS ==")
+        for version, status, n in db.execute(text(
+            "SELECT source_version, COALESCE(status, '(none)'), COUNT(*) FROM emission_factors "
+            "WHERE source = :s GROUP BY 1, 2 ORDER BY 1, 2"), {"s": SOURCE}):
+            add(f"  {n:>6}  {version} | {status}")
+        add(f"components: {db.execute(text('SELECT COUNT(*) FROM emission_factor_components')).scalar()}")
+
+        add("\n== DO THE COMPONENTS ADD UP TO THE FACTOR'S TOTAL? (tolerance 2%) ==")
+        rows = db.execute(text(
+            "SELECT f.source_id, f.name, f.unit, f.kg_co2e_per_unit AS total, "
+            "SUM(c.kg_co2e_per_unit) AS parts "
+            "FROM emission_factors f JOIN emission_factor_components c "
+            "ON c.emission_factor_id = f.id WHERE f.source = :s GROUP BY f.id"), {"s": SOURCE}).all()
+        bad = [r for r in rows if abs(r.parts - r.total) > 0.02 * abs(r.total) + 1e-9]
+        add(f"factors with components: {len(rows)} | not adding up: {len(bad)}")
+        for r in sorted(bad, key=lambda r: -abs(r.parts - r.total))[:10]:
+            add(f"  id {r.source_id} | {r.name[:60]} | total {r.total} | parts {r.parts}")
+
+        def show(label: str, name_like: str, unit: str) -> None:
+            hits = (
+                db.query(EmissionFactor)
+                .filter(
+                    EmissionFactor.source == SOURCE,
+                    EmissionFactor.name.ilike(name_like),
+                    func.lower(EmissionFactor.unit) == unit.lower(),
+                    EmissionFactor.geography == "France continentale",
+                    EmissionFactor.status.notilike("archiv%"),
+                )
+                .order_by(func.length(EmissionFactor.name))
+                .limit(4)
+                .all()
+            )
+            add(f"\n== {label}: first {len(hits)} non-archived, France continentale ==")
+            for f in hits:
+                add(f"  db id {f.id} | ademe id {f.source_id} | {f.name} | {f.sub_geography} | "
+                    f"{f.kg_co2e_per_unit} kgCO2e/{f.unit} | uncertainty {f.uncertainty_pct} | {f.status}")
+                for c in f.components:
+                    add(f"      {c.post_type} / {c.post_name}: {c.kg_co2e_per_unit}  {c.gases}")
+
+        show("ELECTRICITY", "%lectricit%mix moyen%", "kWh")
+        show("NATURAL GAS (PCS)", "%gaz naturel%", "kWh PCS")
+        show("NATURAL GAS (PCI)", "%gaz naturel%", "kWh PCI")
+        show("DIESEL", "%gazole%", "litre")
+        show("PETROL", "%essence%", "litre")
+    finally:
+        db.close()
+
+    REPORT = Path("ademe_verify.txt")
+    REPORT.write_text("\n".join(out), encoding="utf-8")
+    print(f"wrote {REPORT} ({len(out)} lines)")
+
+
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) == 2 else ""
-    {"fetch": fetch, "report": report}.get(command, lambda: print(__doc__))()
+    {"fetch": fetch, "report": report, "load": load, "verify": verify}.get(
+        command, lambda: print(__doc__)
+    )()
