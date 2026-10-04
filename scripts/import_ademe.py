@@ -1,0 +1,205 @@
+"""
+ADEME Base Carbone import, step by step.
+
+  python scripts/import_ademe.py fetch    # API -> data/base_carbone.jsonl (+ meta file)
+  python scripts/import_ademe.py report   # analyse the saved file; writes ademe_report.txt (no DB access)
+"""
+import json
+import os
+import re
+import statistics
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.stdout.reconfigure(encoding="utf-8")
+
+from app.ingest.ademe import SKIP_UNIT_FORMAT, clean_text, norm, parse_row, to_float
+
+API_BASE = "https://data.ademe.fr/data-fair/api/v1/datasets/base-carboner"
+DATA_FILE = Path("data/base_carbone.jsonl")
+META_FILE = Path("data/base_carbone.meta.json")
+REPORT_FILE = Path("ademe_report.txt")
+PAGE_SIZE = 1000
+
+
+def fetch() -> None:
+    import httpx
+
+    DATA_FILE.parent.mkdir(exist_ok=True)
+    with httpx.Client(timeout=60, follow_redirects=True) as client:
+        meta = client.get(API_BASE).json()
+        expected = meta.get("count")
+        url, params = f"{API_BASE}/lines", {"size": PAGE_SIZE}
+        n = 0
+        with DATA_FILE.open("w", encoding="utf-8") as out:
+            while url:
+                resp = client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+                results = data.get("results", [])
+                for row in results:
+                    out.write(json.dumps(row, ensure_ascii=False) + "\n")
+                n += len(results)
+                print(f"fetched {n} / {expected}")
+                url, params = (data.get("next") if results else None), None
+
+    if expected is not None and n != expected:
+        sys.exit(f"ERROR: fetched {n} rows but the API reports {expected}. Not trusting this file.")
+
+    META_FILE.write_text(
+        json.dumps(
+            {
+                "title": meta.get("title"),
+                "count": expected,
+                "dataUpdatedAt": meta.get("dataUpdatedAt"),
+                "fetchedAt": datetime.now(timezone.utc).isoformat(),
+                "api": API_BASE,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    print("saved", DATA_FILE)
+
+
+def _top(counter: Counter, n: int) -> list[str]:
+    return [f"  {c:>6}  {v}" for v, c in counter.most_common(n)]
+
+
+def _brief(v: dict) -> str:
+    keys = [
+        "identifiant_de_l_element", "nom_base_francais", "unite_francais", "type_poste",
+        "nom_poste_francais", "total_poste_non_decompose", "co2f", "ch4f", "ch4b", "n2o",
+        "co2b", "autres_ges",
+    ]
+    return json.dumps({k: v.get(k) for k in keys if v.get(k) not in (None, "")}, ensure_ascii=False)
+
+
+def report() -> None:
+    with DATA_FILE.open(encoding="utf-8") as fh:
+        rows = [json.loads(line) for line in fh]
+    meta = json.loads(META_FILE.read_text(encoding="utf-8"))
+    views = [{norm(k): v for k, v in r.items()} for r in rows]
+
+    out: list[str] = []
+    add = out.append
+
+    def is_element(v):
+        return norm(v.get("type_ligne") or "") == "element"
+
+    add(f"rows in file: {len(rows)} | API count: {meta['count']} | dataUpdatedAt: {meta['dataUpdatedAt']}")
+
+    add("\n== ROW TYPES (Type_Ligne, Type de l'élément) ==")
+    types = Counter((clean_text(v.get("type_ligne")), clean_text(v.get("type_de_l_element"))) for v in views)
+    out += [f"  {c:>6}  {a} / {b}" for (a, b), c in types.most_common()]
+
+    add("\n== ELEMENT+FACTOR ROWS BY STRUCTURE: is a total present? ==")
+    by_struct = Counter()
+    for v in views:
+        if is_element(v) and norm(v.get("type_de_l_element") or "") == "facteur_d_emission":
+            has = to_float(v.get("total_poste_non_decompose")) is not None
+            by_struct[(clean_text(v.get("structure")), "total" if has else "NO total")] += 1
+    out += [f"  {c:>6}  {s} | {t}" for (s, t), c in sorted(by_struct.items())]
+
+    parsed, skipped, odd_units = [], Counter(), Counter()
+    for r, v in zip(rows, views):
+        p, reason = parse_row(r)
+        if p:
+            parsed.append(p)
+        else:
+            skipped[reason] += 1
+            if reason == SKIP_UNIT_FORMAT:
+                odd_units[clean_text(v.get("unite_francais"))] += 1
+
+    add(f"\n== IMPORTABLE: {len(parsed)} of {len(rows)} rows ==")
+    add("skipped, by reason:")
+    out += _top(skipped, 20)
+    add("skipped for unit format (top 20 raw units):")
+    out += _top(odd_units, 20)
+
+    valid = [p for p in parsed if p.status and not norm(p.status).startswith("archive")]
+    add(f"\nimportable by status:")
+    out += _top(Counter(p.status for p in parsed), 10)
+    add("importable by geography:")
+    out += _top(Counter(p.geography for p in parsed), 10)
+
+    by_id = defaultdict(list)
+    for p in parsed:
+        by_id[p.source_id].append(p)
+    dups = {k: v for k, v in by_id.items() if len(v) > 1}
+    add(f"\ndistinct ids: {len(by_id)} | ids appearing more than once: {len(dups)}")
+    for k, v in list(dups.items())[:5]:
+        add(f"  id {k}: " + " | ".join(f"{p.kg_co2e_per_unit} {p.unit} [{p.status}]" for p in v))
+
+    add(f"\nmax name length: {max(len(p.name) for p in parsed)} (over 500: {sum(len(p.name) > 500 for p in parsed)})")
+    add(f"max unit length: {max(len(p.unit) for p in parsed)} (over 50: {sum(len(p.unit) > 50 for p in parsed)})")
+
+    add(f"\n== UNITS: {len(Counter(p.unit for p in parsed))} distinct; top 40 overall ==")
+    out += _top(Counter(p.unit for p in parsed), 40)
+    add(f"top 30 among non-archived ({len(valid)} factors):")
+    out += _top(Counter(p.unit for p in valid), 30)
+
+    add("\n== UNCERTAINTY (Incertitude) ==")
+    for label, group in (("all importable", parsed), ("non-archived", valid)):
+        vals = [p.uncertainty_pct for p in group if p.uncertainty_pct is not None]
+        if vals:
+            add(f"  {label}: {len(vals)} of {len(group)} have a value | min {min(vals)} | "
+                f"median {statistics.median(vals)} | max {max(vals)}")
+        else:
+            add(f"  {label}: none have a value")
+
+    totals = [p.kg_co2e_per_unit for p in parsed]
+    add(f"\n== TOTALS: min {min(totals)} | max {max(totals)} | zero {sum(t == 0 for t in totals)} | "
+        f"negative {sum(t < 0 for t in totals)} ==")
+
+    add("\n== CATEGORY, first level (non-archived) ==")
+    out += _top(Counter((p.category_path or "(none)").split(">")[0].strip() for p in valid), 15)
+
+    add("\n== POSTE ROWS vs ELEMENT ROWS ==")
+    posts_by_id = defaultdict(list)
+    for v in views:
+        if norm(v.get("type_ligne") or "") == "poste":
+            posts_by_id[clean_text(v.get("identifiant_de_l_element"))].append(v)
+    element_ids = {clean_text(v.get("identifiant_de_l_element")) for v in views if is_element(v)}
+    n_poste = sum(len(x) for x in posts_by_id.values())
+    linked = sum(len(x) for k, x in posts_by_id.items() if k in element_ids)
+    add(f"  poste rows: {n_poste} | sharing an id with an element row: {linked}")
+
+    add("\n== SAMPLES OF DECOMPOSED ELEMENTS (one per structure) ==")
+    seen = set()
+    for v in views:
+        s = norm(v.get("structure") or "")
+        if not is_element(v) or not s.startswith("element_decompose") or s in seen:
+            continue
+        seen.add(s)
+        add(f"\n  structure: {clean_text(v.get('structure'))}")
+        add(f"    element: {_brief(v)}")
+        for post in posts_by_id.get(clean_text(v.get("identifiant_de_l_element")), [])[:4]:
+            add(f"    poste:   {_brief(post)}")
+
+    add("\n== SPOT CHECKS (non-archived, shortest names first) ==")
+
+    def spot(label: str, name_pattern: str, unit_hint: str, n: int = 6) -> None:
+        rx = re.compile(name_pattern)
+        hits = [p for p in valid if rx.search(norm(p.name)) and unit_hint in p.unit.lower()]
+        add(f"\n  {label}: {len(hits)} matches")
+        for p in sorted(hits, key=lambda p: len(p.name))[:n]:
+            add(f"    id {p.source_id} | {p.name[:80]} | {p.kg_co2e_per_unit} kgCO2e/{p.unit} | "
+                f"{p.geography} | uncertainty {p.uncertainty_pct}")
+
+    spot("electricity", "electricite", "kwh")
+    spot("natural gas", "gaz_naturel", "kwh")
+    spot("diesel", "gazole", "litre")
+    spot("fuel oil", "fioul", "litre")
+    spot("petrol", "essence", "litre")
+
+    REPORT_FILE.write_text("\n".join(out), encoding="utf-8")
+    print(f"wrote {REPORT_FILE} ({len(out)} lines)")
+
+
+if __name__ == "__main__":
+    command = sys.argv[1] if len(sys.argv) == 2 else ""
+    {"fetch": fetch, "report": report}.get(command, lambda: print(__doc__))()

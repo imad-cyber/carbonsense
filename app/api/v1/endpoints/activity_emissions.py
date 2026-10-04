@@ -39,8 +39,8 @@ def create_emission_from_activity(
         calculation=CalculationBreakdown(
             formula=formula,
             co2_tonnes=calc.co2_tonnes,
-            co2_tonnes_low=calc.co2_tonnes_low,
-            co2_tonnes_high=calc.co2_tonnes_high,
+            co2_tonnes_low=None if calc.co2_tonnes_low is None else round(calc.co2_tonnes_low, 6),
+            co2_tonnes_high=None if calc.co2_tonnes_high is None else round(calc.co2_tonnes_high, 6),
             note=(
                 f"Source: {factor.source} {factor.source_version}. The range reflects "
                 "the factor's stated uncertainty only, not errors in the activity data."

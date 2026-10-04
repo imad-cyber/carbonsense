@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 from pydantic import BaseModel
 
@@ -13,6 +14,8 @@ class EmissionFactorResponse(BaseModel):
     uncertainty_pct: Optional[float] = None
     geography: Optional[str] = None
     status: Optional[str] = None
+    category_path: Optional[str] = None
+    valid_until: Optional[date] = None
 
     model_config = {"from_attributes": True}
 

@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Column, Float, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Column, Date, Float, Integer, String, Text, UniqueConstraint
 from app.db.database import Base
 from app.models.base import TimestampMixin
 
@@ -20,6 +20,8 @@ class EmissionFactor(TimestampMixin, Base):
     uncertainty_pct = Column(Float, nullable=True)
     geography = Column(String(100), nullable=True)
     status = Column(String(50), nullable=True)
+    category_path = Column(Text, nullable=True)   # e.g. "Combustibles > Gaz naturel > ..."
+    valid_until = Column(Date, nullable=True)     # the source's "Période de validité"
     raw = Column(JSON, nullable=True)                          # original row, for audit
 
     def __repr__(self):

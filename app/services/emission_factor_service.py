@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from app.models.emission_factor import EmissionFactor
 
@@ -16,6 +16,8 @@ class EmissionFactorService:
         q: str | None = None,
         unit: str | None = None,
         geography: str | None = None,
+        category: str | None = None,
+        include_archived: bool = False,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[EmissionFactor], int]:
@@ -26,6 +28,12 @@ class EmissionFactorService:
             query = query.filter(func.lower(EmissionFactor.unit) == unit.lower())
         if geography:
             query = query.filter(EmissionFactor.geography.ilike(_like(geography), escape="\\"))
+        if category:
+            query = query.filter(EmissionFactor.category_path.ilike(_like(category), escape="\\"))
+        if not include_archived:
+            query = query.filter(
+                or_(EmissionFactor.status.is_(None), ~EmissionFactor.status.ilike("archiv%"))
+            )
         total = query.count()
         items = (
             query.order_by(EmissionFactor.name)
