@@ -6,7 +6,7 @@ from app.schemas.user import UserCreate, UserResponse, TokenResponse, LoginReque
 from app.services.user_service import UserService
 from app.core.security import create_access_token
 from app.core.config import settings
-from app.core.dependencies import get_current_active_user
+from app.core.dependencies import get_current_active_user, require_admin
 from app.core.rate_limiter import limiter
 from app.models.user import User
 
@@ -17,6 +17,16 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @limiter.limit("10/minute")
 # 10 registrations per minute per IP — prevents automated account creation
 def register(request: Request, payload: UserCreate, db: Session = Depends(get_db)):
+    return UserService.create(db, payload.as_self_registration())
+
+
+@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def admin_create_user(
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Only admins can create users with a chosen role."""
     return UserService.create(db, payload)
 
 

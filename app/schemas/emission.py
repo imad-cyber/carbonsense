@@ -85,7 +85,9 @@ class EmissionRecordResponse(EmissionRecordBase):
     factor_kg_co2e_per_unit: Optional[float] = None
     factor_unit: Optional[str] = None
     factor_source_version: Optional[str] = None
-    factor_uncertainty_pct: Optional[float] = None
+    factor_uncertainty_pct: Optional[float]
+    activity_group_id: Optional[str] = None
+    factor_post_type: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -143,15 +145,25 @@ class ActivityEmissionCreate(BaseModel):
         return self
 
 
-class CalculationBreakdown(BaseModel):
-    formula: str
+class SliceBreakdown(BaseModel):
+    scope: EmissionScope
+    category: EmissionCategory
+    post_type: str
+    kg_co2e_per_unit: float
     co2_tonnes: float
     co2_tonnes_low: Optional[float] = None
     co2_tonnes_high: Optional[float] = None
+
+
+class CalculationBreakdown(BaseModel):
+    formula: str
+    co2_tonnes_total: float
+    slices: list[SliceBreakdown]
     note: str
     warnings: list[str] = Field(default_factory=list)
 
 
 class ActivityEmissionResult(BaseModel):
-    record: EmissionRecordResponse
+    activity_group_id: str
+    records: list[EmissionRecordResponse]
     calculation: CalculationBreakdown

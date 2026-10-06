@@ -22,3 +22,19 @@ def test_missing_uncertainty_is_flagged():
 def test_clean_factor_has_no_warnings():
     assert factor_warnings(status="Valide générique", valid_until=date(2030, 1, 1),
                            uncertainty_pct=5, reporting_year=2025) == []
+
+def test_monthly_record_inside_validity_is_not_flagged():
+    assert factor_warnings(status="Valide générique", valid_until=date(2025, 2, 28),
+                           uncertainty_pct=5, reporting_year=2025, reporting_month=1) == []
+
+
+def test_month_after_validity_is_flagged():
+    w = factor_warnings(status="Valide générique", valid_until=date(2025, 2, 28),
+                        uncertainty_pct=5, reporting_year=2025, reporting_month=3)
+    assert len(w) == 1 and "2025-03-31" in w[0]
+
+
+def test_annual_record_running_past_validity_is_flagged():
+    w = factor_warnings(status="Valide générique", valid_until=date(2025, 2, 28),
+                        uncertainty_pct=5, reporting_year=2025)
+    assert len(w) == 1 and "2025-12-31" in w[0]

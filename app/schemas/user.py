@@ -39,6 +39,10 @@ class UserCreate(BaseModel):
             raise ValueError("Password must contain at least one digit")
         return v
 
+    def as_self_registration(self) -> "UserCreate":
+        """Public sign-up never chooses its own role."""
+        return self.model_copy(update={"role": UserRole.ANALYST})
+
 
 class UserResponse(BaseModel):
     id: int
