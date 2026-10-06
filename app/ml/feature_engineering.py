@@ -4,6 +4,25 @@ from sqlalchemy.orm import Session
 from app.models.emission import EmissionRecord
 
 
+def stream_key(emission_factor_id: int | None, factor_post_type: str | None) -> str:
+    """Records fed by the same factor and post form one stream (e.g. one fuel); direct input is its own."""
+    if not emission_factor_id:
+        return "direct"
+    return f"{emission_factor_id}:{factor_post_type or 'total'}"
+
+
+def _require_contiguous_months(df: pd.DataFrame) -> None:
+    period = df["reporting_year"] * 12 + df["reporting_month"]
+    span = period.groupby([df[c] for c in ("company_id", "scope", "category")]).agg(
+        ["min", "max", "nunique"]
+    )
+    gapped = span[(span["max"] - span["min"] + 1) != span["nunique"]]
+    if not gapped.empty:
+        raise ValueError(
+            f"Monthly gaps in {len(gapped)} series (e.g. {list(gapped.index[:3])}); "
+            "lag features need consecutive months."
+        )
+
 def load_emission_dataframe(db: Session, company_id: int = None) -> pd.DataFrame:
     """
     Loads emission records from PostgreSQL into a pandas DataFrame.
@@ -29,6 +48,7 @@ def load_emission_dataframe(db: Session, company_id: int = None) -> pd.DataFrame
             "reporting_year": r.reporting_year,
             "reporting_month": r.reporting_month or 0,
             "data_source": r.data_source or "unknown",
+            "stream": stream_key(r.emission_factor_id, r.factor_post_type),
         }
         for r in records
     ]
@@ -45,8 +65,19 @@ def engineer_forecasting_features(df: pd.DataFrame) -> pd.DataFrame:
     Good features encode domain knowledge — e.g. 'winter months have
     higher Scope 1 emissions' becomes a sine/cosine time feature.
     """
+
     if df.empty:
         return df
+
+    # One row per series and month. Lags and rolling windows below assume it.
+    df = df[df["reporting_month"].between(1, 12)]   # annual records are not monthly data
+    if df.empty:
+        return df
+    df = df.groupby(
+        ["company_id", "scope", "category", "reporting_year", "reporting_month"],
+        as_index=False,
+    )["co2_tonnes"].sum()
+    _require_contiguous_months(df)
 
     df = df.copy()
 
@@ -140,6 +171,7 @@ def get_feature_columns() -> list[str]:
         "cat_employee_commuting",
         "cat_supply_chain",
         "cat_waste",
+        "cat_fuel_energy_related",
     ]
 
 
@@ -179,4 +211,4 @@ def temporal_holdout_mask(X: pd.DataFrame, holdout_months: int = 6) -> pd.Series
     accidentally scoring the model on rows it trained on.
     """
     period = X["reporting_year"] * 12 + X["reporting_month"]
-    return period < (period.max() - holdout_months + 1)
+    return period < (period.max() - holdout_months + 1)

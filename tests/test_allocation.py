@@ -78,3 +78,8 @@ def test_zero_upstream_does_not_create_a_record():
     plan = plan_allocation(S.SCOPE_1, C.STATIONARY_COMBUSTION, 1.0,
                            [Comp("Combustion", 1.0), Comp("Amont", 0.0)])
     assert len(plan.slices) == 1
+
+def test_district_heat_without_breakdown_warns_and_books_the_total():
+    plan = plan_allocation(S.SCOPE_2, C.PURCHASED_HEAT, 0.1, [])
+    assert [(s.post_type, s.kg_co2e_per_unit) for s in plan.slices] == [("total", 0.1)]
+    assert "District heat" in plan.warnings[0]

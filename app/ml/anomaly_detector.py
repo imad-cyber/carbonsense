@@ -34,6 +34,8 @@ def build_anomaly_features(df: pd.DataFrame) -> pd.DataFrame:
     # How many standard deviations is this value from the group mean?
     # An anomaly would have a z-score far from 0 (e.g. > 3)
     group = ["company_id", "scope", "category"]
+    if "stream" in df.columns:  # separate activity streams are separate series
+        group.append("stream")
 
     df["group_mean"] = df.groupby(group)["co2_tonnes"].transform("mean")
     df["group_std"] = df.groupby(group)["co2_tonnes"].transform("std").fillna(1)
@@ -44,8 +46,7 @@ def build_anomaly_features(df: pd.DataFrame) -> pd.DataFrame:
     df["ratio_to_median"] = df["co2_tonnes"] / df["group_median"].replace(0, 1)
 
     # Month-over-month change within series
-    df = df.sort_values(["company_id", "scope", "category",
-                         "reporting_year", "reporting_month"])
+    df = df.sort_values(group + ["reporting_year", "reporting_month"])
     df["mom_change"] = df.groupby(group)["co2_tonnes"].pct_change().fillna(0)
 
     return df

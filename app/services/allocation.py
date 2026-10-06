@@ -58,11 +58,17 @@ def plan_allocation(scope, category, total_kg_per_unit, components) -> Allocatio
     components = list(components)
     whole = Slice(scope, category, "total", total_kg_per_unit)
 
-    if key in _UNREVIEWED and components:
-        raise AllocationError(
-            "District heat/cold factors with a breakdown are not supported yet: "
-            "their posts have not been reviewed for scope allocation."
-        )
+    if key in _UNREVIEWED:
+        if components:
+            raise AllocationError(
+                "District heat/cold factors with a breakdown are not supported yet: "
+                "their posts have not been reviewed for scope allocation."
+            )
+        return AllocationPlan([whole], [
+            "District heat/cold factors are published as a single value, and it has not been "
+            "reviewed whether it counts direct emissions only or includes upstream. Check the "
+            "factor's documentation before relying on this Scope 2 figure."
+        ])
     if key not in _SPLIT:
         return AllocationPlan([whole], [])
     if not components:

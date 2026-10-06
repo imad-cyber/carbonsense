@@ -106,7 +106,8 @@ def anomaly_section(bench: pd.DataFrame) -> str:
 
 
 LIMITATIONS = """## Limitations
-- All data is synthetic, from `scripts/generate_training_data.py`: smooth seasonality, a built-in 3% annual decline and about 5% Gaussian noise. A forecaster cannot be shown to beat a baseline on data this regular, and recovering the trend factor only confirms the built-in decline.
+- All data is synthetic. Five companies come from `scripts/generate_training_data.py`: tonnes entered directly, smooth seasonality, a built-in 3% annual decline and about 5% Gaussian noise. One demo company comes from `scripts/seed_demo_company.py`: synthetic activity quantities converted with real ADEME Base Carbone V23.6 factors. Recovering the built-in trend factor only confirms what the generators put in.
+- Three anomalies in the demo company were planted by the author, so finding them illustrates the detector and does not benchmark it.
 - Anomalies are planted by multiplication, so ranking by distance from the series median scores near-perfectly by construction. That says nothing about real reporting errors such as unit mistakes, double counting or missing months.
 - The detector compares each record with the series median, not with the same calendar month, so seasonal peaks look mildly unusual.
 - Each run plants only about 28 to 72 anomalies; differences smaller than the reported spread are not meaningful.
