@@ -343,8 +343,62 @@ def verify() -> None:
     print(f"wrote {REPORT} ({len(out)} lines)")
 
 
+def posts() -> None:
+    """Which post types exist per factor category, and how many factors the allocation rules cover."""
+    from sqlalchemy import or_
+    from app.db.database import SessionLocal
+    from app.models.emission import EmissionScope
+    from app.models.emission_factor import EmissionFactor, EmissionFactorComponent
+    from app.services.allocation import DIRECT_POSTS, ENERGY_RELATED_POSTS
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(EmissionFactor.id, EmissionFactor.category_path, EmissionFactorComponent.post_type)
+            .join(EmissionFactorComponent, EmissionFactorComponent.emission_factor_id == EmissionFactor.id)
+            .filter(
+                EmissionFactor.source == SOURCE,
+                or_(EmissionFactor.status.is_(None), ~EmissionFactor.status.ilike("archiv%")),
+            )
+            .all()
+        )
+    finally:
+        db.close()
+
+    by_factor, top_of = defaultdict(set), {}
+    for fid, path, post in rows:
+        by_factor[fid].add(post)
+        top_of[fid] = (path or "(none)").split(">")[0].strip()
+
+    out = ["== POST TYPES BY TOP-LEVEL CATEGORY (non-archived factors with components) =="]
+    by_top = defaultdict(Counter)
+    for fid, ps in by_factor.items():
+        for p in ps:
+            by_top[top_of[fid]][p] += 1
+    for top, counter in sorted(by_top.items()):
+        out.append(f"\n  {top}  ({sum(1 for t in top_of.values() if t == top)} factors)")
+        out += [f"    {n:>5}  {p}" for p, n in counter.most_common()]
+
+    known = {
+        "Combustibles": DIRECT_POSTS[EmissionScope.SCOPE_1] | ENERGY_RELATED_POSTS,
+        "Electricité": DIRECT_POSTS[EmissionScope.SCOPE_2] | ENERGY_RELATED_POSTS,
+    }
+    out.append("\n== COVERAGE OF THE ALLOCATION RULES ==")
+    for top, k in known.items():
+        ids = [f for f, t in top_of.items() if t == top]
+        ok = {f for f in ids if {norm(p) for p in by_factor[f]} <= k}
+        out.append(f"  {top}: {len(ok)} of {len(ids)} factors with components are fully covered")
+        unhandled = Counter(
+            p for f in ids if f not in ok for p in by_factor[f] if norm(p) not in k
+        )
+        out += [f"      not handled: {n:>4}  {p}" for p, n in unhandled.most_common(10)]
+
+    Path("ademe_posts.txt").write_text("\n".join(out), encoding="utf-8")
+    print(f"wrote ademe_posts.txt ({len(out)} lines)")
+
+
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) == 2 else ""
-    {"fetch": fetch, "report": report, "load": load, "verify": verify}.get(
+    {"fetch": fetch, "report": report, "load": load, "verify": verify, "posts": posts}.get(
         command, lambda: print(__doc__)
     )()

@@ -30,6 +30,7 @@ class EmissionCategory(str, enum.Enum):
     EMPLOYEE_COMMUTING = "employee_commuting"         # Scope 3
     SUPPLY_CHAIN = "supply_chain"                     # Scope 3
     WASTE = "waste"                                   # Scope 3
+    FUEL_ENERGY_RELATED = "fuel_energy_related"   # Scope 3: upstream of fuels/energy, grid losses
 
 
 class EmissionRecord(TimestampMixin, Base):
@@ -81,24 +82,12 @@ class EmissionRecord(TimestampMixin, Base):
     factor_unit = Column(String(50), nullable=True)
     factor_source_version = Column(String(50), nullable=True)
     factor_uncertainty_pct = Column(Float, nullable=True)
+    activity_group_id = Column(String(36), nullable=True, index=True)  # rows from one activity entry
+    factor_post_type = Column(String(100), nullable=True)              # part of the factor this row used
 
     # SQLAlchemy relationship — lets us do record.company to get the Company object
     # back_populates means Company will also have a .emission_records attribute
     company = relationship("Company", back_populates="emission_records")
-
-    # --- How the number was produced (audit trail) ---
-    calc_method = Column(String(30), nullable=False, server_default="direct_input")
-    activity_quantity = Column(Float, nullable=True)
-    activity_unit = Column(String(50), nullable=True)
-    emission_factor_id = Column(
-        Integer, ForeignKey("emission_factors.id", ondelete="RESTRICT"),
-        nullable=True, index=True,
-    )
-    # Snapshot of the factor at calculation time: later factor updates must not rewrite history
-    factor_kg_co2e_per_unit = Column(Float, nullable=True)
-    factor_unit = Column(String(50), nullable=True)
-    factor_source_version = Column(String(50), nullable=True)
-    factor_uncertainty_pct = Column(Float, nullable=True)
 
     def __repr__(self):
         return (
