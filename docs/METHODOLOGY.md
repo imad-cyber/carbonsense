@@ -22,3 +22,6 @@ Booking a factor's total as Scope 1 would overstate it by about 1.2x (gas), 1.25
   modelled, and about half of the factors publish no uncertainty.
 - Allocation of grid losses to Scope 3 follows secondary sources; confirm against ADEME's guidance.
 - The factor snapshot is V23.6 (July 2025); newer releases are imported as new versions.
+
+- The organisational boundary (operational control) is the user's responsibility. Sites outside it should not be booked as Scope 1/2; a published filing books such a site's electricity at the factor's full value under "other indirect".
+- Refrigerant factors depend on the GWP vintage of the Base Carbone version (IPCC report); results can differ from filings that used an older version.

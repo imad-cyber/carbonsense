@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import require_analyst_or_above, require_any_authenticated
 from app.db.database import get_db
 from app.ml.inference import inference_service
+from app.ml.feature_engineering import stream_key
+from app.ml.findings import group_findings
 from app.models.user import User
 from app.services.emission_service import EmissionService
 from app.schemas.emission import TaskStatusResponse
@@ -65,6 +67,8 @@ def forecast_emissions(
                 "co2_tonnes": r.co2_tonnes,
                 "reporting_year": r.reporting_year,
                 "reporting_month": r.reporting_month or 0,
+                "stream": stream_key(r.emission_factor_id, r.factor_post_type),
+                "activity_group_id": r.activity_group_id,
             }
             for r in records
         ]
@@ -121,6 +125,8 @@ def detect_anomalies(
                 "co2_tonnes": r.co2_tonnes,
                 "reporting_year": r.reporting_year,
                 "reporting_month": r.reporting_month or 0,
+                "stream": stream_key(r.emission_factor_id, r.factor_post_type),
+                "activity_group_id": r.activity_group_id,
             }
             for r in records
         ]
@@ -135,6 +141,7 @@ def detect_anomalies(
             "anomaly_count": anomaly_count,
             "anomaly_rate": round(anomaly_count / len(results), 3) if results else 0.0,
             "records": results,
+        "findings": group_findings(results),
         }
     except HTTPException:
         raise

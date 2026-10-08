@@ -90,11 +90,14 @@ def resolve_factors(db) -> tuple[dict, list[int]]:
     if latest < MIN_ELECTRICITY_FACTOR_YEAR:
         sys.exit(f"Newest electricity factor is from {latest} (available: {sorted(by_year)}). "
                  "Not using it for 2022-2024 data; send me this message.")
+    missing = [y for y in YEARS if y not in by_year]
+    if missing:
+        sys.exit(f"No France electricity factor for {missing} (available: {sorted(by_year)}).")
     return {
         "gas": by_source_id("37133"),      # Gaz naturel - 2022 - mix moyen - consommation (kWh PCS)
         "diesel": by_source_id("25775"),   # Gazole routier - B7 (litre)
-        "electricity": by_year[latest],
-    }, sorted(by_year)
+        "electricity": by_year[latest],    # used only for the dry run's January 2024
+    }, sorted(by_year), by_year
 
 
 def describe(factors: dict, years: list[int]) -> None:
@@ -124,7 +127,7 @@ def main() -> None:
     args = set(sys.argv[1:])
     db = SessionLocal()
     try:
-        factors, years = resolve_factors(db)
+        factors, years, elec_by_year = resolve_factors(db)
         describe(factors, years)
         if "--dry-run" in args:
             dry_run(factors)
@@ -163,7 +166,9 @@ def main() -> None:
                         q *= mult
                     ActivityEmissionService.create(db, ActivityEmissionCreate(
                         company_id=company.id, scope=s["scope"], category=s["category"],
-                        emission_factor_id=factors[s["key"]].id,
+                                                emission_factor_id=(
+                            elec_by_year[year] if s["key"] == "electricity" else factors[s["key"]]
+                        ).id,
                         quantity=round(q, 1), unit=s["unit"],
                         reporting_year=year, reporting_month=month,
                         data_source="DEMO synthetic activity data",

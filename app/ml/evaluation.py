@@ -66,6 +66,7 @@ def inject_anomalies(
 
 CURRENT_FEATURES = ["co2_tonnes", "z_score", "ratio_to_median", "mom_change", "reporting_month"]
 SCALE_FREE_FEATURES = ["z_score", "ratio_to_median", "mom_change", "reporting_month"]
+LOG_FEATURES = ["log_ratio_to_median", "log_ratio_same_month", "log_mom_change"]
 
 
 def _iso_rank(feats: pd.DataFrame, cols: list[str]) -> np.ndarray:
@@ -95,20 +96,19 @@ def anomaly_benchmark(
                 kind = feats["kind"].to_numpy()
                 truth = kind != "none"
                 k = int(truth.sum())
-                log_ratio = np.abs(
-                    np.log(feats["ratio_to_median"].clip(lower=1e-6))
-                ).to_numpy()
                 scorers = {
                     "iso_current_features": _iso_rank(feats, CURRENT_FEATURES),
                     "iso_scale_free": _iso_rank(feats, SCALE_FREE_FEATURES),
+                    "iso_log_features": _iso_rank(feats, LOG_FEATURES),
                     "abs_zscore": feats["z_score"].abs().to_numpy(),
-                    "abs_log_ratio_to_median": log_ratio,
+                    "abs_log_ratio_to_median": feats["log_ratio_to_median"].abs().to_numpy(),
+                    "abs_log_ratio_same_month": feats["log_ratio_same_month"].abs().to_numpy(),
                 }
+                spikes, drops = kind == "spike", kind == "drop"
                 for name, s in scorers.items():
                     top = np.argsort(-s)[:k]
                     in_top = np.zeros(len(s), dtype=bool)
                     in_top[top] = True
-                    spikes, drops = kind == "spike", kind == "drop"
                     rows.append({
                         "severity": severity, "rate": rate, "seed": seed, "scorer": name,
                         "precision_at_k": float(truth[top].mean()),

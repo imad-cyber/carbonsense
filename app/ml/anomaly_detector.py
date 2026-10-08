@@ -1,5 +1,6 @@
 import logging
 import mlflow
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import RobustScaler
@@ -22,17 +23,12 @@ ANOMALY_FEATURES = ["z_score", "ratio_to_median", "mom_change", "reporting_month
 
 def build_anomaly_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Anomaly detection uses different features than forecasting.
-    We want to detect records that are unusual relative to:
-    - The company's own historical pattern (z-score within company+scope)
-    - The expected seasonal pattern for that scope
-    - Peer companies in the same sector (future enhancement)
+    Per-record features describing how unusual a value is for its own series.
+    The linear features (z_score, ratio_to_median, mom_change) treat spikes and drops
+    unevenly. The log features are symmetric (x4 and /4 are equally far from 1), and
+    log_ratio_same_month removes normal seasonality by comparing with the same calendar month.
     """
     df = df.copy()
-
-    # Z-score within company+scope group
-    # How many standard deviations is this value from the group mean?
-    # An anomaly would have a z-score far from 0 (e.g. > 3)
     group = ["company_id", "scope", "category"]
     if "stream" in df.columns:  # separate activity streams are separate series
         group.append("stream")
@@ -41,14 +37,21 @@ def build_anomaly_features(df: pd.DataFrame) -> pd.DataFrame:
     df["group_std"] = df.groupby(group)["co2_tonnes"].transform("std").fillna(1)
     df["z_score"] = (df["co2_tonnes"] - df["group_mean"]) / df["group_std"]
 
-    # Ratio to group median — robust to outliers in the group itself
     df["group_median"] = df.groupby(group)["co2_tonnes"].transform("median")
     df["ratio_to_median"] = df["co2_tonnes"] / df["group_median"].replace(0, 1)
 
-    # Month-over-month change within series
     df = df.sort_values(group + ["reporting_year", "reporting_month"])
     df["mom_change"] = df.groupby(group)["co2_tonnes"].pct_change().fillna(0)
 
+    prev = df.groupby(group)["co2_tonnes"].shift(1)
+    df["log_mom_change"] = np.log(
+        (df["co2_tonnes"] / prev.replace(0, np.nan)).clip(lower=1e-6)
+    ).fillna(0)
+    df["log_ratio_to_median"] = np.log(df["ratio_to_median"].clip(lower=1e-6))
+    month_median = df.groupby(group + ["reporting_month"])["co2_tonnes"].transform("median")
+    df["log_ratio_same_month"] = np.log(
+        (df["co2_tonnes"] / month_median.replace(0, np.nan)).clip(lower=1e-6)
+    ).fillna(0)
     return df
 
 

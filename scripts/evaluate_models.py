@@ -29,9 +29,11 @@ MODEL_LABELS = {
 }
 SCORER_LABELS = {
     "iso_current_features": "Isolation Forest, raw tonnes included",
-    "iso_scale_free": "Isolation Forest, scale-free features",
-    "abs_zscore": "|z-score| within series",
-    "abs_log_ratio_to_median": "|log(value / series median)|",
+    "iso_scale_free": "Isolation Forest, scale-free features (served)",
+    "iso_log_features": "Isolation Forest, log-ratio features",
+    "abs_zscore": "abs(z-score) within series",
+    "abs_log_ratio_to_median": "abs(log(value / series median))",
+    "abs_log_ratio_same_month": "abs(log(value / same-calendar-month median))",
 }
 
 
@@ -108,8 +110,8 @@ def anomaly_section(bench: pd.DataFrame) -> str:
 LIMITATIONS = """## Limitations
 - All data is synthetic. Five companies come from `scripts/generate_training_data.py`: tonnes entered directly, smooth seasonality, a built-in 3% annual decline and about 5% Gaussian noise. One demo company comes from `scripts/seed_demo_company.py`: synthetic activity quantities converted with real ADEME Base Carbone V23.6 factors. Recovering the built-in trend factor only confirms what the generators put in.
 - Three anomalies in the demo company were planted by the author, so finding them illustrates the detector and does not benchmark it.
-- Anomalies are planted by multiplication, so ranking by distance from the series median scores near-perfectly by construction. That says nothing about real reporting errors such as unit mistakes, double counting or missing months.
-- The detector compares each record with the series median, not with the same calendar month, so seasonal peaks look mildly unusual.
+- Anomalies are planted by multiplication, which favours log-ratio scorers. Distance-from-median scoring ranked them almost perfectly on the five smooth synthetic companies, but fell to about 85% once a strongly seasonal series (gas, plus or minus 45%) was added: a planted spike in a seasonal trough hides under normal winter peaks. That says nothing about real reporting errors such as unit mistakes, double counting or missing months.
+- The forecast evaluation window contains the demo company's planted anomalies (June 2024 electricity, and February 2024 gas through its "same month last year" value). They produce the largest errors and drive the worst-series MAPE; the median series MAPE (about 6%) is not affected.
 - Each run plants only about 28 to 72 anomalies; differences smaller than the reported spread are not meaningful.
 - Production flags use an assumed 5% contamination rate, so about 5% of records are flagged whatever the data quality. The benchmark ranks records and does not use that threshold.
 - Severity labels (high, medium, low) come from a simple rule on the deviation from the series median, not from a calibrated model.
