@@ -15,6 +15,13 @@ from app.services.emission_factor_service import EmissionFactorService
 
 
 @dataclass
+class ComputedActivity:
+    factor: EmissionFactor
+    plan: AllocationPlan
+    calculations: list[Calculation]
+
+
+@dataclass
 class ActivityResult:
     group_id: str
     records: list[EmissionRecord]
@@ -25,10 +32,10 @@ class ActivityResult:
 
 class ActivityEmissionService:
     @staticmethod
-    def create(db: Session, data: ActivityEmissionCreate) -> ActivityResult:
+    def compute(db: Session, data: ActivityEmissionCreate) -> ComputedActivity:
+        """Everything except saving: factor lookup, allocation to scopes, calculation."""
         CompanyService.get_by_id(db, data.company_id)  # 404 if missing
         factor = EmissionFactorService.get_by_id(db, data.emission_factor_id)
-
         try:
             plan = plan_allocation(
                 data.scope, data.category, factor.kg_co2e_per_unit, factor.components
@@ -47,7 +54,12 @@ class ActivityEmissionService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
             )
+        return ComputedActivity(factor, plan, calcs)
 
+    @staticmethod
+    def create(db: Session, data: ActivityEmissionCreate) -> ActivityResult:
+        computed = ActivityEmissionService.compute(db, data)
+        factor = computed.factor
         group_id = str(uuid.uuid4())
         records = [
             EmissionRecord(
@@ -71,11 +83,11 @@ class ActivityEmissionService:
                 factor_post_type=s.post_type,
                 activity_label=data.activity_label,
             )
-            for s, c in zip(plan.slices, calcs)
+            for s, c in zip(computed.plan.slices, computed.calculations)
         ]
         db.add_all(records)
         db.commit()
         for record in records:
             db.refresh(record)
         cache.delete_pattern(f"summary:company:{data.company_id}:*")
-        return ActivityResult(group_id, records, calcs, factor, plan)
+        return ActivityResult(group_id, records, computed.calculations, factor, computed.plan)
