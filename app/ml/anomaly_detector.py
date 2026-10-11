@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 # isolation scores so drops in small series became invisible.
 # Experiment (anomaly_experiment.py) confirmed scale-free features raise
 # subtle-anomaly precision@k from 0.66 to 0.80.
-ANOMALY_FEATURES = ["z_score", "ratio_to_median", "mom_change", "reporting_month"]
+# Log scale: spikes and drops of the same factor count equally. log_ratio_same_month removes
+# normal seasonality by comparing with the same calendar month in other years.
+ANOMALY_FEATURES = ["log_ratio_to_median", "log_ratio_same_month", "log_mom_change"]
 
 # RobustScaler: scales features using median and IQR instead of mean/std.
 # Why Robust over Standard? Emission data has outliers by definition —

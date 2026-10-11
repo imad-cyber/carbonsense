@@ -27,8 +27,8 @@ finally:
 
 feats = build_anomaly_features(df).sort_index()   # all companies, as in training
 scorers = {
-    "iso_scale_free (served)": _iso_rank(feats, SCALE_FREE_FEATURES),
-    "iso_log_features": _iso_rank(feats, LOG_FEATURES),
+    "iso_scale_free (previous)": _iso_rank(feats, SCALE_FREE_FEATURES),
+    "iso_log_features (served)": _iso_rank(feats, LOG_FEATURES),
     "abs_log_ratio_same_month": feats["log_ratio_same_month"].abs().to_numpy(),
 }
 mine = (feats["company_id"] == company_id).to_numpy()
