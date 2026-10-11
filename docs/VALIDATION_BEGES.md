@@ -5,7 +5,7 @@ https://www.salesforce.com/en-us/wp-content/uploads/sites/4/documents/legal/misc
 Activity data, factors and results were transcribed from its two pages.
 **Reproduce:** `python scripts/reproduce_beges.py` (factors from ADEME Base Carbone V23.6).
 
-- [x] Transcription checked against the PDF by: Antigravity on 2026-10-09
+- [ ] Transcription checked against the PDF by: ______ on ______
 
 ## Lines reproduced with Base Carbone factors
 

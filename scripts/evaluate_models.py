@@ -109,14 +109,15 @@ def anomaly_section(bench: pd.DataFrame) -> str:
 
 LIMITATIONS = """## Limitations
 - All data is synthetic. Five companies come from `scripts/generate_training_data.py`: tonnes entered directly, smooth seasonality, a built-in 3% annual decline and about 5% Gaussian noise. One demo company comes from `scripts/seed_demo_company.py`: synthetic activity quantities converted with real ADEME Base Carbone V23.6 factors. Recovering the built-in trend factor only confirms what the generators put in.
-- Three anomalies in the demo company were planted by the author, so finding them illustrates the detector and does not benchmark it.
-- Anomalies are planted by multiplication, which favours log-ratio scorers. Distance-from-median scoring ranked them almost perfectly on the five smooth synthetic companies, but fell to about 85% once a strongly seasonal series (gas, plus or minus 45%) was added: a planted spike in a seasonal trough hides under normal winter peaks. That says nothing about real reporting errors such as unit mistakes, double counting or missing months.
+- Three anomalies in the demo company were planted by the author (seven records, because each activity creates several). The benchmark counts them as known positives. Finding them illustrates the detector and does not benchmark it.
+- Benchmark anomalies are planted by multiplication, which favours log-ratio scorers. That says nothing about real reporting errors such as unit mistakes, double counting or missing months.
+- When last run on the demo company, the served detector flagged 17 of 108 activities over 2022-2024: the 3 planted ones and 14 normal seasonal extremes (13 in gas, which swings about 45% between winter and summer, and 1 in electricity in July). The detector compares each record with the series median, not with the same calendar month.
+- The "high" severity label is a fixed rule on the ratio to the series median (at least 2x or at most 0.5x). The planted anomalies were chosen beyond those thresholds, so "all high-severity findings are planted" is true by construction and is not a measure of detection quality.
+- Each benchmark run plants only about 2% or 5% of records; differences smaller than the reported spread are not meaningful.
+- Production flags use a contamination rate fixed at training time (5% of training records), whatever the data quality. The benchmark ranks records and does not use that threshold.
 - The forecast evaluation window contains the demo company's planted anomalies (June 2024 electricity, and February 2024 gas through its "same month last year" value). They produce the largest errors and drive the worst-series MAPE; the median series MAPE (about 6%) is not affected.
-- Each run plants only about 28 to 72 anomalies; differences smaller than the reported spread are not meaningful.
-- Production flags use an assumed 5% contamination rate, so about 5% of records are flagged whatever the data quality. The benchmark ranks records and does not use that threshold.
-- Severity labels (high, medium, low) come from a simple rule on the deviation from the series median, not from a calibrated model.
 - Forecasts are supported only for the month right after the latest data.
-- There has been no validation on real company data."""
+- There has been no validation on real company data. The Scope 1 and 2 accounting lines of one published filing were reproduced (docs/VALIDATION_BEGES.md); that validates the arithmetic and allocation policy for those lines, not the models."""
 
 
 def main() -> None:

@@ -1,9 +1,3 @@
-"""
-app/ml/evaluation.py — Model evaluation helpers.
-
-Shared scoring utilities for forecasting experiments, anomaly injection,
-and multi-seed anomaly benchmarks (see anomaly_benchmark).
-"""
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
@@ -14,21 +8,23 @@ from app.ml.anomaly_detector import build_anomaly_features
 
 SERIES = ["company_id", "scope", "category"]
 
-# Spike and drop multiplier ranges by severity.
-# "subtle" sits inside normal seasonal swings, so it is deliberately hard to detect.
+# (spike range, drop range) multipliers. "subtle" sits inside normal
+# seasonal swings, so it is deliberately hard to detect.
 SEVERITY = {
     "obvious": ((2.5, 4.0), (0.15, 0.40)),
     "subtle": ((1.4, 1.8), (0.55, 0.75)),
 }
 
+CURRENT_FEATURES = ["co2_tonnes", "z_score", "ratio_to_median", "mom_change", "reporting_month"]
+SCALE_FREE_FEATURES = ["z_score", "ratio_to_median", "mom_change", "reporting_month"]
+LOG_FEATURES = ["log_ratio_to_median", "log_ratio_same_month", "log_mom_change"]
+
 
 def _scores(y_true: pd.Series, y_pred: pd.Series, series: pd.DataFrame) -> dict:
     """
-    MAE:  average absolute error in tonnes (scale-dependent).
-    WAPE: sum(|error|) / sum(|actual|) × 100 — a pooled percentage where large
-          and small series contribute in proportion to their volume.
-    MAPE per series, then median and worst — shows whether any single series is
-    badly predicted while the pooled WAPE looks fine.
+    MAE:  average error in tonnes (depends on series size)
+    WAPE: total error / total actual, a pooled percentage that big series don't distort
+    MAPE per series, then median and worst: shows whether any series is badly predicted
     """
     err = (y_true - y_pred).abs()
     ape = err / y_true.replace(0, np.nan)
@@ -41,32 +37,27 @@ def _scores(y_true: pd.Series, y_pred: pd.Series, series: pd.DataFrame) -> dict:
     }
 
 
-def inject_anomalies(
-    df: pd.DataFrame, rate: float, severity: str, seed: int = 42
-) -> pd.DataFrame:
+def inject_anomalies(df: pd.DataFrame, rate: float, severity: str, seed: int = 42) -> pd.DataFrame:
     """
-    Return a copy of df with known anomalies injected at random positions.
-    Each injected record is either a spike (value × large factor) or a drop
-    (value × small factor < 1). A 'kind' column records what was planted.
-
-    Using a fixed seed makes the evaluation reproducible across runs.
+    Copy of df with anomalies planted at known positions: random records multiplied up (spike)
+    or down (drop). Records already known to be anomalous (column known_anomaly) are positives
+    too, labelled 'known', and are never chosen for planting.
     """
     (s_lo, s_hi), (d_lo, d_hi) = SEVERITY[severity]
     rng = np.random.default_rng(seed)
     out = df.copy().reset_index(drop=True)
-    out["kind"] = "none"
-    n_inject = int(len(out) * rate)
-    for i in rng.choice(len(out), size=n_inject, replace=False):
+    known = (
+        out["known_anomaly"].to_numpy(dtype=bool)
+        if "known_anomaly" in out.columns else np.zeros(len(out), dtype=bool)
+    )
+    out["kind"] = np.where(known, "known", "none")
+    candidates = np.flatnonzero(~known)
+    for i in rng.choice(candidates, size=int(len(out) * rate), replace=False):
         spike = rng.random() < 0.5
         factor = rng.uniform(s_lo, s_hi) if spike else rng.uniform(d_lo, d_hi)
         out.loc[i, "co2_tonnes"] *= factor
         out.loc[i, "kind"] = "spike" if spike else "drop"
     return out
-
-
-CURRENT_FEATURES = ["co2_tonnes", "z_score", "ratio_to_median", "mom_change", "reporting_month"]
-SCALE_FREE_FEATURES = ["z_score", "ratio_to_median", "mom_change", "reporting_month"]
-LOG_FEATURES = ["log_ratio_to_median", "log_ratio_same_month", "log_mom_change"]
 
 
 def _iso_rank(feats: pd.DataFrame, cols: list[str]) -> np.ndarray:
@@ -83,8 +74,8 @@ def anomaly_benchmark(
     seeds=range(10),
 ) -> pd.DataFrame:
     """
-    Rank all records by suspiciousness and check how many planted anomalies
-    land in the top k (k = number planted). One row per (setting, seed, scorer).
+    Rank all records by suspiciousness and check how many positives (planted + known)
+    land in the top k (k = number of positives). One row per (setting, seed, scorer).
     """
     rows = []
     for severity in severities:
@@ -104,7 +95,7 @@ def anomaly_benchmark(
                     "abs_log_ratio_to_median": feats["log_ratio_to_median"].abs().to_numpy(),
                     "abs_log_ratio_same_month": feats["log_ratio_same_month"].abs().to_numpy(),
                 }
-                spikes, drops = kind == "spike", kind == "drop"
+                spikes, drops, known = kind == "spike", kind == "drop", kind == "known"
                 for name, s in scorers.items():
                     top = np.argsort(-s)[:k]
                     in_top = np.zeros(len(s), dtype=bool)
@@ -115,5 +106,6 @@ def anomaly_benchmark(
                         "avg_precision": float(average_precision_score(truth, s)),
                         "spikes_found": float(in_top[spikes].mean()) if spikes.any() else np.nan,
                         "drops_found": float(in_top[drops].mean()) if drops.any() else np.nan,
+                        "known_found": float(in_top[known].mean()) if known.any() else np.nan,
                     })
     return pd.DataFrame(rows)

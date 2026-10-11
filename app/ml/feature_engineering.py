@@ -48,6 +48,7 @@ def load_emission_dataframe(db: Session, company_id: int = None) -> pd.DataFrame
             "reporting_year": r.reporting_year,
             "reporting_month": r.reporting_month or 0,
             "data_source": r.data_source or "unknown",
+            "known_anomaly": (r.notes or "").startswith("DEMO planted"),
             "stream": stream_key(r.emission_factor_id, r.factor_post_type),
         }
         for r in records

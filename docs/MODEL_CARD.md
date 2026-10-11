@@ -3,7 +3,7 @@
 Model trained: 20261007_024956
 
 ## Data
-1697 monthly emission records. Sources: DEMO synthetic activity data, synthetic_training_data, unknown.
+1692 monthly emission records. Sources: DEMO synthetic activity data, synthetic_training_data.
 
 **All results below are on synthetic data.** They show the pipeline works end to end, not that the models predict real company emissions.
 
@@ -36,38 +36,39 @@ Anomalies were planted by multiplying random records up (spikes) or down (drops)
 
 | Planted | Rate | Scorer | Precision@k | Spikes found | Drops found |
 |---|---|---|---|---|---|
-| obvious | 2% | abs(log(value / same-calendar-month median)) | 0.912 +/- 0.046 | 0.93 | 0.89 |
-| obvious | 2% | abs(log(value / series median)) | 0.852 +/- 0.010 | 0.86 | 0.85 |
-| obvious | 2% | abs(z-score) within series | 0.773 +/- 0.063 | 0.96 | 0.60 |
-| obvious | 2% | Isolation Forest, raw tonnes included | 0.748 +/- 0.045 | 0.99 | 0.52 |
-| obvious | 2% | Isolation Forest, log-ratio features | 0.906 +/- 0.039 | 0.90 | 0.90 |
-| obvious | 2% | Isolation Forest, scale-free features (served) | 0.803 +/- 0.043 | 1.00 | 0.62 |
-| obvious | 5% | abs(log(value / same-calendar-month median)) | 0.907 +/- 0.038 | 0.90 | 0.92 |
-| obvious | 5% | abs(log(value / series median)) | 0.944 +/- 0.008 | 0.93 | 0.96 |
-| obvious | 5% | abs(z-score) within series | 0.765 +/- 0.022 | 0.94 | 0.59 |
-| obvious | 5% | Isolation Forest, raw tonnes included | 0.707 +/- 0.042 | 0.98 | 0.45 |
-| obvious | 5% | Isolation Forest, log-ratio features | 0.942 +/- 0.016 | 0.93 | 0.95 |
-| obvious | 5% | Isolation Forest, scale-free features (served) | 0.814 +/- 0.030 | 0.99 | 0.65 |
-| subtle | 2% | abs(log(value / same-calendar-month median)) | 0.855 +/- 0.031 | 0.88 | 0.83 |
-| subtle | 2% | abs(log(value / series median)) | 0.412 +/- 0.056 | 0.47 | 0.35 |
-| subtle | 2% | abs(z-score) within series | 0.591 +/- 0.059 | 0.77 | 0.43 |
-| subtle | 2% | Isolation Forest, raw tonnes included | 0.558 +/- 0.046 | 0.81 | 0.32 |
-| subtle | 2% | Isolation Forest, log-ratio features | 0.770 +/- 0.026 | 0.83 | 0.71 |
-| subtle | 2% | Isolation Forest, scale-free features (served) | 0.667 +/- 0.047 | 0.84 | 0.50 |
-| subtle | 5% | abs(log(value / same-calendar-month median)) | 0.867 +/- 0.047 | 0.88 | 0.85 |
-| subtle | 5% | abs(log(value / series median)) | 0.617 +/- 0.042 | 0.66 | 0.57 |
-| subtle | 5% | abs(z-score) within series | 0.674 +/- 0.035 | 0.79 | 0.57 |
-| subtle | 5% | Isolation Forest, raw tonnes included | 0.508 +/- 0.036 | 0.74 | 0.29 |
-| subtle | 5% | Isolation Forest, log-ratio features | 0.820 +/- 0.036 | 0.87 | 0.78 |
-| subtle | 5% | Isolation Forest, scale-free features (served) | 0.738 +/- 0.040 | 0.86 | 0.62 |
+| obvious | 2% | abs(log(value / same-calendar-month median)) | 0.835 +/- 0.054 | 0.91 | 0.89 |
+| obvious | 2% | abs(log(value / series median)) | 1.000 +/- 0.000 | 1.00 | 1.00 |
+| obvious | 2% | abs(z-score) within series | 0.835 +/- 0.053 | 0.99 | 0.67 |
+| obvious | 2% | Isolation Forest, raw tonnes included | 0.845 +/- 0.052 | 0.99 | 0.69 |
+| obvious | 2% | Isolation Forest, log-ratio features | 0.975 +/- 0.012 | 0.98 | 0.97 |
+| obvious | 2% | Isolation Forest, scale-free features (served) | 0.912 +/- 0.032 | 1.00 | 0.81 |
+| obvious | 5% | abs(log(value / same-calendar-month median)) | 0.860 +/- 0.019 | 0.88 | 0.89 |
+| obvious | 5% | abs(log(value / series median)) | 0.993 +/- 0.006 | 0.99 | 1.00 |
+| obvious | 5% | abs(z-score) within series | 0.788 +/- 0.042 | 0.96 | 0.61 |
+| obvious | 5% | Isolation Forest, raw tonnes included | 0.725 +/- 0.037 | 0.99 | 0.48 |
+| obvious | 5% | Isolation Forest, log-ratio features | 0.982 +/- 0.014 | 0.98 | 0.98 |
+| obvious | 5% | Isolation Forest, scale-free features (served) | 0.848 +/- 0.029 | 1.00 | 0.71 |
+| subtle | 2% | abs(log(value / same-calendar-month median)) | 0.810 +/- 0.050 | 0.89 | 0.83 |
+| subtle | 2% | abs(log(value / series median)) | 0.573 +/- 0.058 | 0.58 | 0.40 |
+| subtle | 2% | abs(z-score) within series | 0.715 +/- 0.068 | 0.85 | 0.49 |
+| subtle | 2% | Isolation Forest, raw tonnes included | 0.600 +/- 0.047 | 0.81 | 0.25 |
+| subtle | 2% | Isolation Forest, log-ratio features | 0.887 +/- 0.038 | 0.93 | 0.81 |
+| subtle | 2% | Isolation Forest, scale-free features (served) | 0.818 +/- 0.044 | 0.93 | 0.64 |
+| subtle | 5% | abs(log(value / same-calendar-month median)) | 0.837 +/- 0.024 | 0.87 | 0.85 |
+| subtle | 5% | abs(log(value / series median)) | 0.688 +/- 0.026 | 0.71 | 0.61 |
+| subtle | 5% | abs(z-score) within series | 0.721 +/- 0.033 | 0.79 | 0.61 |
+| subtle | 5% | Isolation Forest, raw tonnes included | 0.565 +/- 0.028 | 0.77 | 0.30 |
+| subtle | 5% | Isolation Forest, log-ratio features | 0.878 +/- 0.015 | 0.91 | 0.83 |
+| subtle | 5% | Isolation Forest, scale-free features (served) | 0.808 +/- 0.027 | 0.90 | 0.69 |
 
 ## Limitations
 - All data is synthetic. Five companies come from `scripts/generate_training_data.py`: tonnes entered directly, smooth seasonality, a built-in 3% annual decline and about 5% Gaussian noise. One demo company comes from `scripts/seed_demo_company.py`: synthetic activity quantities converted with real ADEME Base Carbone V23.6 factors. Recovering the built-in trend factor only confirms what the generators put in.
-- Three anomalies in the demo company were planted by the author, so finding them illustrates the detector and does not benchmark it.
-- Anomalies are planted by multiplication, which favours log-ratio scorers. Distance-from-median scoring ranked them almost perfectly on the five smooth synthetic companies, but fell to about 85% once a strongly seasonal series (gas, plus or minus 45%) was added: a planted spike in a seasonal trough hides under normal winter peaks. That says nothing about real reporting errors such as unit mistakes, double counting or missing months.
+- Three anomalies in the demo company were planted by the author (seven records, because each activity creates several). The benchmark counts them as known positives. Finding them illustrates the detector and does not benchmark it.
+- Benchmark anomalies are planted by multiplication, which favours log-ratio scorers. That says nothing about real reporting errors such as unit mistakes, double counting or missing months.
+- When last run on the demo company, the served detector flagged 17 of 108 activities over 2022-2024: the 3 planted ones and 14 normal seasonal extremes (13 in gas, which swings about 45% between winter and summer, and 1 in electricity in July). The detector compares each record with the series median, not with the same calendar month.
+- The "high" severity label is a fixed rule on the ratio to the series median (at least 2x or at most 0.5x). The planted anomalies were chosen beyond those thresholds, so "all high-severity findings are planted" is true by construction and is not a measure of detection quality.
+- Each benchmark run plants only about 2% or 5% of records; differences smaller than the reported spread are not meaningful.
+- Production flags use a contamination rate fixed at training time (5% of training records), whatever the data quality. The benchmark ranks records and does not use that threshold.
 - The forecast evaluation window contains the demo company's planted anomalies (June 2024 electricity, and February 2024 gas through its "same month last year" value). They produce the largest errors and drive the worst-series MAPE; the median series MAPE (about 6%) is not affected.
-- Each run plants only about 28 to 72 anomalies; differences smaller than the reported spread are not meaningful.
-- Production flags use an assumed 5% contamination rate, so about 5% of records are flagged whatever the data quality. The benchmark ranks records and does not use that threshold.
-- Severity labels (high, medium, low) come from a simple rule on the deviation from the series median, not from a calibrated model.
 - Forecasts are supported only for the month right after the latest data.
-- There has been no validation on real company data.
+- There has been no validation on real company data. The Scope 1 and 2 accounting lines of one published filing were reproduced (docs/VALIDATION_BEGES.md); that validates the arithmetic and allocation policy for those lines, not the models.
