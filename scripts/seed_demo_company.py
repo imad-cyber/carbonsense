@@ -37,11 +37,14 @@ MIN_ELECTRICITY_FACTOR_YEAR = 2018
 S1, S2 = EmissionScope.SCOPE_1, EmissionScope.SCOPE_2
 
 STREAMS = [
-    dict(key="gas", scope=S1, category=EmissionCategory.STATIONARY_COMBUSTION,
+    dict(key="gas", label="natural gas, boilers", scope=S1,
+         category=EmissionCategory.STATIONARY_COMBUSTION,
          unit="MWh PCS", base=450.0, amp=0.45, peak=1),
-    dict(key="diesel", scope=S1, category=EmissionCategory.MOBILE_COMBUSTION,
+    dict(key="diesel", label="road diesel, fleet", scope=S1,
+         category=EmissionCategory.MOBILE_COMBUSTION,
          unit="litre", base=18_000.0, amp=0.05, peak=12),
-    dict(key="electricity", scope=S2, category=EmissionCategory.PURCHASED_ELECTRICITY,
+    dict(key="electricity", label="grid electricity", scope=S2,
+         category=EmissionCategory.PURCHASED_ELECTRICITY,
          unit="kWh", base=1_800_000.0, amp=0.10, peak=1),
 ]
 PLANTED = {  # (year, month, stream) -> multiplier on the quantity
@@ -170,6 +173,7 @@ def main() -> None:
                             elec_by_year[year] if s["key"] == "electricity" else factors[s["key"]]
                         ).id,
                         quantity=round(q, 1), unit=s["unit"],
+                        activity_label=s["label"],
                         reporting_year=year, reporting_month=month,
                         data_source="DEMO synthetic activity data",
                         notes=f"DEMO planted anomaly: quantity x{mult}" if mult else None,

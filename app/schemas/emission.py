@@ -88,6 +88,7 @@ class EmissionRecordResponse(EmissionRecordBase):
     factor_uncertainty_pct: Optional[float]
     activity_group_id: Optional[str] = None
     factor_post_type: Optional[str] = None
+    activity_label: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -138,6 +139,10 @@ class ActivityEmissionCreate(BaseModel):
     reporting_month: Optional[int] = Field(None, ge=1, le=12)
     data_source: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
+    activity_label: Optional[str] = Field(
+        None, max_length=100,
+        description="What this stream measures, e.g. 'boiler gas, site A'. Records sharing a label form one monitored series.",
+    )
 
     @model_validator(mode="after")
     def validate_scope_category_match(self) -> "ActivityEmissionCreate":

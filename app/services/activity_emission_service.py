@@ -69,6 +69,7 @@ class ActivityEmissionService:
                 factor_uncertainty_pct=factor.uncertainty_pct,
                 activity_group_id=group_id,
                 factor_post_type=s.post_type,
+                activity_label=data.activity_label,
             )
             for s, c in zip(plan.slices, calcs)
         ]

@@ -4,11 +4,23 @@ from sqlalchemy.orm import Session
 from app.models.emission import EmissionRecord
 
 
-def stream_key(emission_factor_id: int | None, factor_post_type: str | None) -> str:
-    """Records fed by the same factor and post form one stream (e.g. one fuel); direct input is its own."""
+def stream_key(
+    emission_factor_id: int | None,
+    factor_post_type: str | None,
+    activity_label: str | None = None,
+) -> str:
+    """
+    Records of one monitored stream (e.g. boiler gas at site A) form one series for anomaly
+    scoring. An explicit activity_label identifies the stream and survives a change of
+    emission factor (factors are versioned yearly). Without a label the factor id is used, so a
+    new factor starts a new series. Direct-input records are one stream.
+    """
+    post = factor_post_type or "total"
+    if activity_label:
+        return f"{activity_label.strip().lower()}:{post}"
     if not emission_factor_id:
         return "direct"
-    return f"{emission_factor_id}:{factor_post_type or 'total'}"
+    return f"{emission_factor_id}:{post}"
 
 
 def _require_contiguous_months(df: pd.DataFrame) -> None:
@@ -49,7 +61,8 @@ def load_emission_dataframe(db: Session, company_id: int = None) -> pd.DataFrame
             "reporting_month": r.reporting_month or 0,
             "data_source": r.data_source or "unknown",
             "known_anomaly": (r.notes or "").startswith("DEMO planted"),
-            "stream": stream_key(r.emission_factor_id, r.factor_post_type),
+            "stream": stream_key(r.emission_factor_id, r.factor_post_type, r.activity_label),
+            "activity_group_id": r.activity_group_id,
         }
         for r in records
     ]

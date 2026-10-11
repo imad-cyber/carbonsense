@@ -67,7 +67,7 @@ def forecast_emissions(
                 "co2_tonnes": r.co2_tonnes,
                 "reporting_year": r.reporting_year,
                 "reporting_month": r.reporting_month or 0,
-                "stream": stream_key(r.emission_factor_id, r.factor_post_type),
+                "stream": stream_key(r.emission_factor_id, r.factor_post_type, r.activity_label),
                 "activity_group_id": r.activity_group_id,
             }
             for r in records
@@ -125,7 +125,7 @@ def detect_anomalies(
                 "co2_tonnes": r.co2_tonnes,
                 "reporting_year": r.reporting_year,
                 "reporting_month": r.reporting_month or 0,
-                "stream": stream_key(r.emission_factor_id, r.factor_post_type),
+                "stream": stream_key(r.emission_factor_id, r.factor_post_type, r.activity_label),
                 "activity_group_id": r.activity_group_id,
             }
             for r in records

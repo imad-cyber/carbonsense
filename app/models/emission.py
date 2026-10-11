@@ -84,6 +84,7 @@ class EmissionRecord(TimestampMixin, Base):
     factor_uncertainty_pct = Column(Float, nullable=True)
     activity_group_id = Column(String(36), nullable=True, index=True)  # rows from one activity entry
     factor_post_type = Column(String(100), nullable=True)              # part of the factor this row used
+    activity_label = Column(String(100), nullable=True)   # what this stream measures, e.g. "grid electricity"
 
     # SQLAlchemy relationship — lets us do record.company to get the Company object
     # back_populates means Company will also have a .emission_records attribute
