@@ -15,44 +15,50 @@ logger = logging.getLogger(__name__)
 # Log scale: spikes and drops of the same factor count equally. log_ratio_same_month removes
 # normal seasonality by comparing with the same calendar month in other years.
 ANOMALY_FEATURES = ["log_ratio_to_median", "log_ratio_same_month", "log_mom_change"]
+ALERT_BUDGET = 0.05   # fraction of a batch flagged for review
 
-# RobustScaler: scales features using median and IQR instead of mean/std.
-# Why Robust over Standard? Emission data has outliers by definition —
-# StandardScaler would distort the scale for the majority of normal points.
-# RobustScaler is resistant to outliers, which is exactly what we want
-# when the TASK is to find outliers.
+
+def flag_most_unusual(scores: np.ndarray, budget: float) -> np.ndarray:
+    """Flags the `budget` fraction of lowest scores (lowest = most unusual); at least one if any."""
+    flagged = np.zeros(len(scores), dtype=bool)
+    if len(scores):
+        k = max(1, int(round(budget * len(scores))))
+        flagged[np.argsort(scores)[:k]] = True
+    return flagged
 
 
 def build_anomaly_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Per-record features describing how unusual a value is for its own series.
-    The linear features (z_score, ratio_to_median, mom_change) treat spikes and drops
-    unevenly. The log features are symmetric (x4 and /4 are equally far from 1), and
-    log_ratio_same_month removes normal seasonality by comparing with the same calendar month.
+    The value judged is the activity quantity behind the tonnes ('monitored') when available,
+    so a revised emission factor is not an anomaly; otherwise the tonnes themselves.
+    Log features treat spikes and drops symmetrically; log_ratio_same_month removes
+    normal seasonality by comparing with the same calendar month in other years.
     """
     df = df.copy()
+    value = "monitored" if "monitored" in df.columns else "co2_tonnes"
     group = ["company_id", "scope", "category"]
     if "stream" in df.columns:  # separate activity streams are separate series
         group.append("stream")
 
-    df["group_mean"] = df.groupby(group)["co2_tonnes"].transform("mean")
-    df["group_std"] = df.groupby(group)["co2_tonnes"].transform("std").fillna(1)
-    df["z_score"] = (df["co2_tonnes"] - df["group_mean"]) / df["group_std"]
+    df["group_mean"] = df.groupby(group)[value].transform("mean")
+    df["group_std"] = df.groupby(group)[value].transform("std").fillna(1)
+    df["z_score"] = (df[value] - df["group_mean"]) / df["group_std"]
 
-    df["group_median"] = df.groupby(group)["co2_tonnes"].transform("median")
-    df["ratio_to_median"] = df["co2_tonnes"] / df["group_median"].replace(0, 1)
+    df["group_median"] = df.groupby(group)[value].transform("median")
+    df["ratio_to_median"] = df[value] / df["group_median"].replace(0, 1)
 
     df = df.sort_values(group + ["reporting_year", "reporting_month"])
-    df["mom_change"] = df.groupby(group)["co2_tonnes"].pct_change().fillna(0)
+    df["mom_change"] = df.groupby(group)[value].pct_change().fillna(0)
 
-    prev = df.groupby(group)["co2_tonnes"].shift(1)
+    prev = df.groupby(group)[value].shift(1)
     df["log_mom_change"] = np.log(
-        (df["co2_tonnes"] / prev.replace(0, np.nan)).clip(lower=1e-6)
+        (df[value] / prev.replace(0, np.nan)).clip(lower=1e-6)
     ).fillna(0)
     df["log_ratio_to_median"] = np.log(df["ratio_to_median"].clip(lower=1e-6))
-    month_median = df.groupby(group + ["reporting_month"])["co2_tonnes"].transform("median")
+    month_median = df.groupby(group + ["reporting_month"])[value].transform("median")
     df["log_ratio_same_month"] = np.log(
-        (df["co2_tonnes"] / month_median.replace(0, np.nan)).clip(lower=1e-6)
+        (df[value] / month_median.replace(0, np.nan)).clip(lower=1e-6)
     ).fillna(0)
     return df
 

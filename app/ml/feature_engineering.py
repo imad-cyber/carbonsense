@@ -35,6 +35,17 @@ def _require_contiguous_months(df: pd.DataFrame) -> None:
             "lag features need consecutive months."
         )
 
+def monitored_value(co2_tonnes: float, factor_kg_co2e_per_unit: float | None) -> float:
+    """
+    The activity quantity (in the factor's unit) behind a record: tonnes x 1000 / factor.
+    Anomalies are judged on this, so a revised emission factor does not look like one.
+    Direct-input records have no factor, so their tonnes are used as they are.
+    """
+    if factor_kg_co2e_per_unit:
+        return co2_tonnes * 1000.0 / factor_kg_co2e_per_unit
+    return co2_tonnes
+
+
 def load_emission_dataframe(db: Session, company_id: int = None) -> pd.DataFrame:
     """
     Loads emission records from PostgreSQL into a pandas DataFrame.
@@ -61,6 +72,7 @@ def load_emission_dataframe(db: Session, company_id: int = None) -> pd.DataFrame
             "reporting_month": r.reporting_month or 0,
             "data_source": r.data_source or "unknown",
             "known_anomaly": (r.notes or "").startswith("DEMO planted"),
+            "monitored": monitored_value(r.co2_tonnes, r.factor_kg_co2e_per_unit),
             "stream": stream_key(r.emission_factor_id, r.factor_post_type, r.activity_label),
             "activity_group_id": r.activity_group_id,
         }

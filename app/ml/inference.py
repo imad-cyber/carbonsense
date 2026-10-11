@@ -16,7 +16,9 @@ from app.ml.feature_engineering import (
     engineer_forecasting_features,
     get_feature_columns,
 )
-from app.ml.anomaly_detector import ANOMALY_FEATURES, build_anomaly_features
+from app.ml.anomaly_detector import (
+    ALERT_BUDGET, ANOMALY_FEATURES, build_anomaly_features, flag_most_unusual,
+)
 from app.ml.explainability import explain_prediction
 from app.ml.forecaster import CHALLENGER, predict_baseline, predict_challenger, ratio_features
 from app.ml.model_registry import load_model, model_exists
@@ -172,50 +174,40 @@ class EmissionInferenceService:
 
     # ── Anomaly detection ─────────────────────────────────────────────────
 
-    def detect_anomalies(self, records: list[dict]) -> list[dict]:
+    def detect_anomalies(
+        self, records: list[dict], alert_budget: float | None = ALERT_BUDGET
+    ) -> list[dict]:
         """
-        Score a list of emission records for anomalies.
-
-        The full company history must be passed in so that group statistics
-        (z-score, ratio-to-median) are stable — the same as in training.
-        Caller is responsible for filtering the returned list to the desired
-        year.
-
-        Uses scale-free features (no raw co2_tonnes) so large companies don't
-        crowd out small-series anomalies.  Each flagged record gets a plain-
-        language reason: how many times the series median it was.
+        Scores records and flags the most unusual ones.
+        alert_budget: fraction of the batch to flag, a review queue. Flags show where to look
+        first, not confirmed errors; a clean batch still gets its top records flagged.
+        None falls back to the model's own training-time threshold.
         """
         model, scaler = self._load_anomaly()
 
         df = pd.DataFrame(records)
-        # build_anomaly_features sorts rows internally; sort_index restores
-        # the original input order so scores align with `records` positionally
+        # build_anomaly_features sorts rows; restore input order so scores line up with `records`
         df_features = build_anomaly_features(df).sort_index()
         X_scaled = scaler.transform(df_features[ANOMALY_FEATURES].fillna(0))
 
-        predictions = model.predict(X_scaled)       # -1 = anomaly, 1 = normal
-        scores = model.score_samples(X_scaled)      # higher = more normal
-        ratios = df_features["ratio_to_median"].to_numpy()
+        scores = model.score_samples(X_scaled)
+        flagged = (
+            flag_most_unusual(scores, alert_budget) if alert_budget is not None
+            else model.predict(X_scaled) == -1
+        )
+        same_month = np.exp(df_features["log_ratio_same_month"].to_numpy())
+        series = df_features["ratio_to_median"].to_numpy()
 
         results = []
         for i, record in enumerate(records):
-            flagged = bool(predictions[i] == -1)
-            severity = _severity(float(ratios[i])) if flagged else None
-            if flagged:
-                try:
-                    from app.core.metrics import anomalies_detected_total
-                    anomalies_detected_total.labels(
-                        severity=severity, scope=str(record.get("scope", ""))
-                    ).inc()
-                except Exception:  # noqa: BLE001 — metrics must never break inference
-                    pass
-
             results.append({
                 **record,
                 "anomaly_score": round(float(scores[i]), 4),
-                "is_anomaly": flagged,
-                "anomaly_severity": severity,
-                "times_series_median": round(float(ratios[i]), 2),
+                "is_anomaly": bool(flagged[i]),
+                # severity rule (2x / 0.5x = high) applied to the same-month ratio
+                "anomaly_severity": _severity(float(same_month[i])) if flagged[i] else None,
+                "times_same_month": round(float(same_month[i]), 2),
+                "times_series_median": round(float(series[i]), 2),
             })
         return results
 

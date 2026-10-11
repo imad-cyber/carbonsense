@@ -26,6 +26,7 @@ def group_findings(results: list[dict]) -> list[dict]:
             "reporting_month": rows[0]["reporting_month"],
             "severity": top["anomaly_severity"],
             "times_series_median": top["times_series_median"],
+            "times_same_month": top.get("times_same_month"),
             "total_co2_tonnes": round(sum(r["co2_tonnes"] for r in rows), 3),
             "records": [
                 {

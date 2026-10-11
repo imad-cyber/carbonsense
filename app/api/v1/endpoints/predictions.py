@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import require_analyst_or_above, require_any_authenticated
 from app.db.database import get_db
 from app.ml.inference import inference_service
-from app.ml.feature_engineering import stream_key
+from app.ml.feature_engineering import monitored_value, stream_key
 from app.ml.findings import group_findings
 from app.models.user import User
 from app.services.emission_service import EmissionService
@@ -125,6 +125,7 @@ def detect_anomalies(
                 "co2_tonnes": r.co2_tonnes,
                 "reporting_year": r.reporting_year,
                 "reporting_month": r.reporting_month or 0,
+                "monitored": monitored_value(r.co2_tonnes, r.factor_kg_co2e_per_unit),
                 "stream": stream_key(r.emission_factor_id, r.factor_post_type, r.activity_label),
                 "activity_group_id": r.activity_group_id,
             }

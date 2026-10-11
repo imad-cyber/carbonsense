@@ -56,6 +56,8 @@ def inject_anomalies(df: pd.DataFrame, rate: float, severity: str, seed: int = 4
         spike = rng.random() < 0.5
         factor = rng.uniform(s_lo, s_hi) if spike else rng.uniform(d_lo, d_hi)
         out.loc[i, "co2_tonnes"] *= factor
+        if "monitored" in out.columns:
+            out.loc[i, "monitored"] *= factor
         out.loc[i, "kind"] = "spike" if spike else "drop"
     return out
 
