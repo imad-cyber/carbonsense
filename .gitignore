@@ -1,41 +1,35 @@
-﻿# Python
+# Python
 venv/
 __pycache__/
 *.pyc
 *.egg-info/
-dist/
 .pytest_cache/
-.coverage
-coverage.xml
-# Environment â€” never commit real secrets
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Secrets and local config
 .env
+.env.local
 .env.docker
-# ML artifacts
-mlflow.db
+
+# Local databases, models, indexes
+*.db
 mlruns/
 models/*.joblib
 vector_store/
-logs/
+
+# ADEME downloads and generated reports
+data/
+ademe_*.txt
+base_carbone.csv
+
 # Frontend
 frontend/node_modules/
 frontend/dist/
-frontend/.vercel/
-frontend/.env.local
-# Vercel pulled env (contains secrets)
-.env.vercel.*
-# OS / editor
-.DS_Store
-Thumbs.db
-.idea/
+
+# Editors and OS
 .vscode/
-.vercel
-ademe_report.txt
-ademe_verify.txt
-ademe_posts.txt
-data/
-data/*.csv
-ademe_api.txt
-ademe_csv.txt
-ademe_report.txt
-ademe_verify.txt
-ademe_posts.txt
+.idea/
+.DS_Store
