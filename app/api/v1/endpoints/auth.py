@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Request
+from fastapi import APIRouter, Depends, status, Request, HTTPException
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from app.db.database import get_db
@@ -17,6 +17,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @limiter.limit("10/minute")
 # 10 registrations per minute per IP — prevents automated account creation
 def register(request: Request, payload: UserCreate, db: Session = Depends(get_db)):
+    if not settings.REGISTRATION_ENABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Registration is disabled on this deployment")
     return UserService.create(db, payload.as_self_registration())
 
 

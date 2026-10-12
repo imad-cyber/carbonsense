@@ -71,6 +71,25 @@ class AnomalyRecordResult(BaseModel):
     times_series_median: float
 
 
+class FindingRecordItem(BaseModel):
+    record_id: Optional[int] = None
+    scope: str
+    category: str
+    co2_tonnes: float
+    is_anomaly: bool
+
+
+class FindingItem(BaseModel):
+    activity_group_id: Optional[str] = None
+    reporting_year: int
+    reporting_month: int
+    severity: str
+    times_series_median: float
+    times_same_month: Optional[float] = None
+    total_co2_tonnes: float
+    records: list[FindingRecordItem]
+
+
 class AnomalyScanResponse(BaseModel):
     company_id: int
     year: int
@@ -78,6 +97,7 @@ class AnomalyScanResponse(BaseModel):
     anomaly_count: int
     anomaly_rate: float
     records: list[AnomalyRecordResult]
+    findings: list[FindingItem] = []
 
 
 class FeatureImportanceItem(BaseModel):

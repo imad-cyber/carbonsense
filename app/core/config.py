@@ -49,7 +49,10 @@ class Settings(BaseSettings):
     KAFKA_ALERT_TOPIC: str = "emission-alerts"
 
     # Comma-separated list of allowed frontend origins
-    CORS_ORIGINS: str = "http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+
+    # Set to False in production to close self-registration
+    REGISTRATION_ENABLED: bool = True
 
     class Config:
         env_file = ".env"
