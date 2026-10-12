@@ -1,94 +1,67 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AppLayout } from '@/components/layout/AppLayout'
-import { ToastContainer } from '@/components/ui/Toast'
-import { LoginPage } from '@/pages/LoginPage'
-import { RegisterPage } from '@/pages/RegisterPage'
-import { DashboardPage } from '@/pages/DashboardPage'
-import { CompaniesPage } from '@/pages/CompaniesPage'
-import { EmissionsPage } from '@/pages/EmissionsPage'
-import { PredictionsPage } from '@/pages/PredictionsPage'
-import { ChatPage } from '@/pages/ChatPage'
-import { ReportsPage } from '@/pages/ReportsPage'
-import { AdminPage } from '@/pages/AdminPage'
-import { NotFoundPage } from '@/pages/NotFoundPage'
-import { useAuthStore } from '@/store/authStore'
+import { useEffect, useState } from "react";
+import { api, type Company } from "./api";
+import Calculator from "./pages/Calculator";
+import Findings from "./pages/Findings";
+import Forecast from "./pages/Forecast";
+import Overview from "./pages/Overview";
+import Validation from "./pages/Validation";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-    },
-  },
-})
-
-/** Guards routes that only specific roles may access. */
-function RoleGuard({ roles, children }: { roles: string[]; children: React.ReactNode }) {
-  const user = useAuthStore((s) => s.user)
-  if (!user || !roles.includes(user.role)) return <Navigate to="/dashboard" replace />
-  return <>{children}</>
-}
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "calculator", label: "Calculator" },
+  { id: "findings", label: "Findings" },
+  { id: "forecast", label: "Forecast" },
+  { id: "validation", label: "Validation" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
 
 export default function App() {
+  const [tab, setTab] = useState<TabId>("overview");
+  const [company, setCompany] = useState<Company | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const repo = import.meta.env.VITE_REPO_URL as string | undefined;
+
+  useEffect(() => {
+    api<{ items: Company[] }>("/companies/?page_size=100")
+      .then((r) => setCompany(r.items.find((c) => c.name.startsWith("Démo")) ?? r.items[0] ?? null))
+      .catch((e: Error) => setError(e.message));
+  }, []);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route
-              path="/companies"
-              element={
-                <RoleGuard roles={['admin', 'analyst', 'auditor']}>
-                  <CompaniesPage />
-                </RoleGuard>
-              }
-            />
-            <Route path="/emissions" element={<EmissionsPage />} />
-            <Route
-              path="/predictions"
-              element={
-                <RoleGuard roles={['admin', 'analyst', 'auditor']}>
-                  <PredictionsPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/chat"
-              element={
-                <RoleGuard roles={['admin', 'analyst', 'auditor']}>
-                  <ChatPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <RoleGuard roles={['admin', 'analyst', 'auditor']}>
-                  <ReportsPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <RoleGuard roles={['admin']}>
-                  <AdminPage />
-                </RoleGuard>
-              }
-            />
-          </Route>
-
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </BrowserRouter>
-      <ToastContainer />
-    </QueryClientProvider>
-  )
+    <div className="app">
+      <header>
+        <div>
+          <h1>CarbonSense</h1>
+          <p className="tagline">
+            Activity data × official ADEME emission factors, allocated to scopes and monitored for anomalies
+          </p>
+        </div>
+        <span className="badge">Read-only demo</span>
+      </header>
+      <div className="notice">
+        Synthetic activity data for a fictional company, calculated with <strong>real</strong> ADEME Base
+        Carbone V23.6 factors. A portfolio project, not a compliance tool.
+      </div>
+      <nav>
+        {TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </nav>
+      <main>
+        {error && <p className="error">{error}</p>}
+        {!error && !company && <p className="muted">Connecting to the API…</p>}
+        {company && tab === "overview" && <Overview company={company} />}
+        {company && tab === "calculator" && <Calculator company={company} />}
+        {company && tab === "findings" && <Findings company={company} />}
+        {company && tab === "forecast" && <Forecast company={company} />}
+        {tab === "validation" && <Validation />}
+      </main>
+      <footer>
+        Emission factors: ADEME Base Carbone, Licence Ouverte 2.0.{" "}
+        {repo && <a href={repo}>Source code, method and model card</a>}
+      </footer>
+    </div>
+  );
 }
