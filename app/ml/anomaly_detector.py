@@ -1,5 +1,4 @@
 import logging
-import mlflow
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
@@ -77,6 +76,8 @@ def train_anomaly_detector(df: pd.DataFrame) -> tuple:
     contamination=0.05 means we expect ~5% of records to be anomalies.
     This threshold determines what score separates normal from anomaly.
     """
+    import mlflow
+
     mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
     mlflow.set_experiment(settings.MLFLOW_EXPERIMENT_NAME)
 

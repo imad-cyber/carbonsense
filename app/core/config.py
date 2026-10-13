@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 200
 
     # Kafka settings (Phase 8) — empty string disables Kafka entirely
-    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
+    KAFKA_BOOTSTRAP_SERVERS: str = ""
     KAFKA_EMISSION_TOPIC: str = "emission-events"
     KAFKA_ALERT_TOPIC: str = "emission-alerts"
 
@@ -53,6 +53,9 @@ class Settings(BaseSettings):
 
     # Set to False in production to close self-registration
     REGISTRATION_ENABLED: bool = True
+
+    # RAG and WebSocket layers: written, not yet verified
+    ENABLE_EXPERIMENTAL: bool = False
 
     class Config:
         env_file = ".env"

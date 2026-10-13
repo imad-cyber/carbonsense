@@ -16,9 +16,11 @@ from app.core.dependencies import (
     require_admin,
 )
 from app.models.user import User
-from app.worker.tasks import process_bulk_emissions, generate_csrd_report
 from app.schemas.emission import BulkEmissionUpload, TaskStatusResponse
 
+# Placeholders for test patching without importing heavy worker tasks at startup
+process_bulk_emissions = None
+generate_csrd_report = None
 
 router = APIRouter(prefix="/emissions", tags=["Emissions"])
 
@@ -110,7 +112,11 @@ def bulk_upload_emissions(
 
     # .delay() queues the task and returns immediately
     # The actual work happens in the Celery worker process
-    task = process_bulk_emissions.delay(company_id, records_data)
+    task_func = process_bulk_emissions
+    if task_func is None:
+        from app.worker.tasks import process_bulk_emissions as task_func
+
+    task = task_func.delay(company_id, records_data)
 
     return TaskStatusResponse(
         task_id=task.id,
@@ -135,7 +141,11 @@ def trigger_csrd_report(
     from app.services.company_service import CompanyService
     CompanyService.get_by_id(db, company_id)
 
-    task = generate_csrd_report.delay(company_id, year)
+    task_func = generate_csrd_report
+    if task_func is None:
+        from app.worker.tasks import generate_csrd_report as task_func
+
+    task = task_func.delay(company_id, year)
 
     return TaskStatusResponse(
         task_id=task.id,

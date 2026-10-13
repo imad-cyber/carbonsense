@@ -18,6 +18,7 @@ build/
 *.db
 mlruns/
 models/*.joblib
+!models/*_latest.joblib
 vector_store/
 
 # ADEME downloads and generated reports

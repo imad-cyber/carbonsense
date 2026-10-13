@@ -79,8 +79,15 @@ async function login(): Promise<string> {
   return data.access_token;
 }
 
+let pending: Promise<string> | null = null;
+
 async function token(): Promise<string> {
-  return sessionStorage.getItem(TOKEN_KEY) ?? (await login());
+  const saved = sessionStorage.getItem(TOKEN_KEY);
+  if (saved) return saved;
+  pending ??= login().finally(() => {
+    pending = null;
+  });
+  return pending;
 }
 
 export async function api<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {

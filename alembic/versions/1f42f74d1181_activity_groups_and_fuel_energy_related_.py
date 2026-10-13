@@ -26,6 +26,11 @@ def upgrade() -> None:
     op.create_index(op.f('ix_emission_records_activity_group_id'), 'emission_records', ['activity_group_id'], unique=False)
     # ### end Alembic commands ###
 
+    bind = op.get_bind()
+    if bind.engine.name == "postgresql":
+        with op.get_context().autocommit_block():
+            op.execute("ALTER TYPE emissioncategory ADD VALUE IF NOT EXISTS 'FUEL_ENERGY_RELATED'")
+
 
 def downgrade() -> None:
     """Downgrade schema."""

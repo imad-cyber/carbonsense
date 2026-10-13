@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends
-from app.worker.celery_app import celery_app
 from app.core.dependencies import require_any_authenticated
 from app.models.user import User
 
@@ -21,6 +20,8 @@ def get_task_status(
     - FAILURE  → something went wrong, error is in result
     - RETRY    → failed, waiting to retry
     """
+    from app.worker.celery_app import celery_app
+
     result = celery_app.AsyncResult(task_id)
 
     response = {

@@ -1,0 +1,14 @@
+.git
+venv
+frontend
+data
+docs
+tests
+scripts
+__pycache__
+*.pyc
+.env*
+mlflow.db
+mlruns
+models/*.joblib
+!models/*_latest.joblib

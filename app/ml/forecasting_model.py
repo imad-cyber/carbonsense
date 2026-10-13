@@ -1,6 +1,4 @@
 import logging
-import mlflow
-import mlflow.xgboost
 import pandas as pd
 import numpy as np
 from xgboost import XGBRegressor
@@ -110,6 +108,9 @@ def train_with_mlflow(
     You can compare runs in the MLflow UI and see exactly
     what changed between model versions.
     """
+    import mlflow
+    import mlflow.xgboost
+
     mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
     mlflow.set_experiment(settings.MLFLOW_EXPERIMENT_NAME)
 
