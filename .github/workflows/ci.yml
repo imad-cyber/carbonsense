@@ -64,3 +64,59 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  container:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -f Dockerfile.api -t carbonsense-api .
+      - name: Native libraries and trained models load inside the image
+        run: |
+          docker run --rm \
+            -e DATABASE_URL=postgresql://ci:ci@localhost:5432/ci \
+            -e SECRET_KEY=ci-only-not-a-secret \
+            carbonsense-api \
+            python -c "import xgboost, shap; from app.ml.model_registry import load_model; assert load_model('forecasting') and load_model('anomaly_detector'); print('image ok')"
+      - name: Start the container (runs the migrations) against Postgres
+        run: |
+          docker run -d --name api --network host \
+            -e DATABASE_URL=postgresql://ci:ci@localhost:5432/ci \
+            -e SECRET_KEY=ci-only-not-a-secret \
+            -e REGISTRATION_ENABLED=false \
+            -e RATE_LIMIT_STORAGE_URL=memory:// \
+            -e ENABLE_EXPERIMENTAL=false \
+            -e PORT=8000 \
+            carbonsense-api
+          for i in $(seq 1 45); do
+            if curl -sf http://localhost:8000/health > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:8000/health
+      - name: Checks against the running container
+        run: |
+          curl -sf http://localhost:8000/openapi.json > openapi.json
+          grep -q "from-activity/preview" openapi.json
+          if grep -q "/api/v1/rag/" openapi.json; then echo "experimental routes are exposed"; exit 1; fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/v1/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"ci@example.com","password":"Passw0rdX1","role":"admin"}')
+          echo "register returned $code"
+          test "$code" = "403"
+      - name: Container logs
+        if: failure()
+        run: docker logs api
+

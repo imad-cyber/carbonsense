@@ -2,7 +2,7 @@
 
 Activity-based carbon accounting for French companies: quantities (kWh, litres, km) multiplied by official ADEME emission factors, with every figure traceable to a factor, a version and a scope.
 
-**Live demo:** TODO-LIVE-URL (read-only; synthetic data for a fictional company)
+**Live demo:** not deployed yet (read-only; synthetic data for a fictional company)
 
 > A portfolio project, not a compliance tool. All company data in it is synthetic.
 
@@ -37,7 +37,7 @@ Activity-based carbon accounting for French companies: quantities (kWh, litres, 
 |---|---|
 | Calculation engine, scope allocation, ADEME import | Tested; Scope 1 and 2 lines checked against a published filing |
 | Anomaly detection, forecasting | Evaluated on synthetic data (see model card) |
-| API and React demo | Deployed: TODO-LIVE-URL |
+| API and React demo | not deployed yet |
 | RAG assistant, WebSocket feed, Kafka, Airflow DAGs, Celery tasks, `docker-compose.yml`, `infra/k8s` | Written earlier in the project and **never run end to end**. Not part of the demo; the API leaves them disabled (`ENABLE_EXPERIMENTAL=false`). |
 
 ## Run it locally
@@ -59,6 +59,9 @@ cd frontend && npm install && npm run dev            # http://localhost:5173
 ```
 
 Tests: `pytest`. The deployed image uses `requirements-api.txt` (only what the API imports) and the committed `models/*_latest.joblib`.
+
+## How this was built
+I built this with AI coding assistants (Claude, and an agentic coding tool in my editor). I set the scope and the method decisions in docs/DECISIONS.md, reviewed the code, and checked results against baselines and a published filing. Several of my own earlier mistakes are recorded there and in the model card: target leakage, a wrong train/validation split, an open registration endpoint and a wrong benchmark explanation.
 
 ## Data and licences
 
