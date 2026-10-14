@@ -21,6 +21,35 @@ jobs:
       - run: pip install -r requirements-api.txt pytest httpx
       - run: pytest -q
 
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      SECRET_KEY: ci-only-not-a-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-api.txt
+      - run: pip install -r requirements-api.txt
+      - run: alembic upgrade head
+      - run: python scripts/ci_check_schema.py
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
